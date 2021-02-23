@@ -1,0 +1,4 @@
+menuconfig KSSB
+	bool "SoftStoreBuffer"
+	help
+	  Software emulation of store buffer
