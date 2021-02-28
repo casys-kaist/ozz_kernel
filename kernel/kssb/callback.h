@@ -24,14 +24,14 @@
 
 #include <linux/kernel.h>
 
+#include "kssb.h"
+
 // TODO: Seems really ugly. Replace this with any better way
 #define _BYTE_1_TO_BITS 8
 #define _BYTE_2_TO_BITS 16
 #define _BYTE_4_TO_BITS 32
 #define _BYTE_8_TO_BITS 64
 #define _BYTE_16_TO_BITS 128
-
-#define BIT_MASK(_BITS) (_BITS == 64 ? 0xffffffffffffffff : (1ULL << _BITS) - 1)
 
 #define __DEFINE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)                   \
 	void __ssb_##_MEMORYMODEL##_store##_BYTES(char *addr,                  \
@@ -41,7 +41,7 @@
 #define __DECLARE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)                  \
 	__DEFINE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)                   \
 	{                                                                      \
-		uint64_t _val = (uint64_t)val & BIT_MASK(_BITS);               \
+		uint64_t _val = (uint64_t)val & _BIT_MASK(_BITS);              \
 		STORE_CALLBACK_IMPL((uint64_t *)addr, _val, _BYTES);           \
 	}                                                                      \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_store##_BYTES);
@@ -57,7 +57,7 @@
 		uint##_BITS##_t val =                                          \
 			LOAD_CALLBACK_IMPL((uint64_t *)addr, _BYTES);          \
 		uint##_BITS##_t _val =                                         \
-			(uint##_BITS##_t)(val & BIT_MASK(_BITS));              \
+			(uint##_BITS##_t)(val & _BIT_MASK(_BITS));             \
 		return _val;                                                   \
 	}                                                                      \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_load##_BYTES);
