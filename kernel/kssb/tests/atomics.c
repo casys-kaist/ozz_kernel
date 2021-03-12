@@ -2,6 +2,8 @@
 // kernel. Instead, they are used to test instrumentation is done
 // correctly.
 
+#include <linux/slab.h>
+#include <linux/kernel.h>
 #include <linux/atomic.h>
 #include <linux/bitops.h>
 
@@ -162,6 +164,31 @@ __attribute__((softstorebuffer)) void __list_atomics(void)
 	smp_mb__before_atomic();
 	smp_mb__after_atomic();
 }
+
+#if !defined(__clang__) && (defined(__GNUC__) || defined(__GNUG__))
+__attribute__((optimize("-O0")))
+#endif
+__attribute__((softstorebuffer)) void __list_refcounts(void)
+{
+	refcount_t r;
+	refcount_set(&r, 1);
+	refcount_read(&r);
+	refcount_inc_not_zero(&r);
+	refcount_inc(&r);
+	refcount_sub_and_test(0, &r);
+	refcount_dec_and_test(&r);
+}
+
+#if !defined(__clang__) && (defined(__GNUC__) || defined(__GNUG__))
+__attribute__((optimize("-O0")))
+#endif
+__attribute__((softstorebuffer)) void __list_rcus(void)
+{
+	synchronize_rcu();
+	rcu_read_lock();
+	rcu_read_unlock();
+}
+
 #if defined(__clang__)
 #pragma clang optimize on
 #endif
