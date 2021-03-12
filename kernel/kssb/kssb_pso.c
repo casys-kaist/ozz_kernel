@@ -71,8 +71,8 @@ static void __flush_single_entry(uint64_t *dst, uint64_t val, size_t size)
 static void flush_single_entry(struct buffer_entry *entry)
 {
 	__flush_single_entry(entry->addr, entry->val, entry->size);
-	reclaim_entry(entry);
 	hash_del(&entry->hlist);
+	reclaim_entry(entry);
 }
 
 static void store_entry(uint64_t *addr, struct buffer_entry *entry)
