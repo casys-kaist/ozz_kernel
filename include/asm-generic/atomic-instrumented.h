@@ -21,13 +21,17 @@
 #include <linux/compiler.h>
 #include <linux/instrumented.h>
 
-#ifdef CONFIG_KSSB
+// As atomic operations flush the store buffer because we instrument
+// them, we need to avoid flushing the store buffer in emulating the
+// store buffer. For those files, define NO_INSTRUMENT_ATOMIC.
+#if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
 // XXX: We don't want to emulate TSO, so use PSO here
 extern void __ssb_pso_flush(char *);
 #define kssb_flush() __ssb_pso_flush(NULL)
 #else
 #define kssb_flush() do {} while(0)
 #endif
+
 #define kssb_flush_release() do {} while(0)
 #define kssb_flush_acquire() kssb_flush()
 

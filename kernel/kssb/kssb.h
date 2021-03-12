@@ -4,6 +4,9 @@
 #include <linux/kernel.h>
 #include <linux/list.h>
 
+// XXX: We really don't want to leave any of API calls as they may use
+// atomic operations. Enabling debugging possibly change the bahavior
+// of store buffer.
 #ifdef __DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
 #else

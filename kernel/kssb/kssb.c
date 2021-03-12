@@ -1,10 +1,13 @@
+#define NO_INSTRUMENT_ATOMIC
+
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/syscalls.h>
 #include <linux/init.h>
 #include <linux/vmalloc.h>
+#include <linux/atomic.h>
 
-#define __DEBUG
+/* #define __DEBUG */
 
 #include "kssb.h"
 
