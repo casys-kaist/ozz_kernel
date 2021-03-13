@@ -48,10 +48,10 @@ int flush_vector_next()
 	rcu_read_lock();
 	// Paired with smp_store_release() in ssb_feedinput()
 	vector = smp_load_acquire(&flush_vector);
-	if (!vector->size)
+	if (!vector || !vector->size || !vector->vector)
 		goto unlock;
 
-	index = atomic_fetch_inc(&vector->index) % vector->size;
+	index = ((unsigned int)atomic_fetch_inc(&vector->index)) % vector->size;
 	ret = vector->vector[index];
 unlock:
 	rcu_read_unlock();
