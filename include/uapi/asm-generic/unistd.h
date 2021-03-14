@@ -883,8 +883,15 @@ __SYSCALL(__NR_process_mrelease, sys_process_mrelease)
 #define __NR_futex_waitv 449
 __SYSCALL(__NR_futex_waitv, sys_futex_waitv)
 
+#define __NR_ssb_feedinput 500
+__SYSCALL(__NR_ssb_feedinput, sys_ssb_feedinput)
+#define __NR_ssb_pso_writer 501
+__SYSCALL(__NR_ssb_pso_writer, sys_ssb_pso_writer)
+#define __NR_ssb_pso_reader 502
+__SYSCALL(__NR_ssb_pso_reader, sys_ssb_pso_reader)
+
 #undef __NR_syscalls
-#define __NR_syscalls 450
+#define __NR_syscalls 503
 
 /*
  * 32 bit systems traditionally used different

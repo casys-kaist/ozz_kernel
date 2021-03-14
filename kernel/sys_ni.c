@@ -71,6 +71,9 @@ COND_SYSCALL_COMPAT(epoll_pwait);
 COND_SYSCALL(epoll_pwait2);
 COND_SYSCALL_COMPAT(epoll_pwait2);
 
+COND_SYSCALL(ssb_feedinput);
+COND_SYSCALL(ssb_pso_writer);
+COND_SYSCALL(ssb_pso_reader);
 /* fs/fcntl.c */
 
 /* fs/inotify_user.c */
