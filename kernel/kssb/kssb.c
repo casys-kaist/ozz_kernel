@@ -126,10 +126,6 @@ static int __init kssb_init(void)
 		reclaim_entry(ptr);
 	}
 
-#ifndef INSTRUMENT_KSSB
-	WARN(1, "KSSB is not instrumented");
-#endif
-
 	return 0;
 }
 
