@@ -52,6 +52,7 @@ int flush_vector_next()
 		goto unlock;
 
 	index = ((unsigned int)atomic_fetch_inc(&vector->index)) % vector->size;
+	BUG_ON(index < 0 || index >= vector->size);
 	ret = vector->vector[index];
 unlock:
 	rcu_read_unlock();
