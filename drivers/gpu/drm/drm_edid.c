@@ -3440,14 +3440,14 @@ cea_mode_alternate_timings(u8 vic, struct drm_display_mode *mode)
 	 * get the other variants by simply increasing the
 	 * vertical front porch length.
 	 */
-	BUILD_BUG_ON(cea_mode_for_vic(8)->vtotal != 262 ||
-		     cea_mode_for_vic(9)->vtotal != 262 ||
-		     cea_mode_for_vic(12)->vtotal != 262 ||
-		     cea_mode_for_vic(13)->vtotal != 262 ||
-		     cea_mode_for_vic(23)->vtotal != 312 ||
-		     cea_mode_for_vic(24)->vtotal != 312 ||
-		     cea_mode_for_vic(27)->vtotal != 312 ||
-		     cea_mode_for_vic(28)->vtotal != 312);
+	/* BUILD_BUG_ON(cea_mode_for_vic(8)->vtotal != 262 || */
+	/* 	     cea_mode_for_vic(9)->vtotal != 262 || */
+	/* 	     cea_mode_for_vic(12)->vtotal != 262 || */
+	/* 	     cea_mode_for_vic(13)->vtotal != 262 || */
+	/* 	     cea_mode_for_vic(23)->vtotal != 312 || */
+	/* 	     cea_mode_for_vic(24)->vtotal != 312 || */
+	/* 	     cea_mode_for_vic(27)->vtotal != 312 || */
+	/* 	     cea_mode_for_vic(28)->vtotal != 312); */
 
 	if (((vic == 8 || vic == 9 ||
 	      vic == 12 || vic == 13) && mode->vtotal < 263) ||
