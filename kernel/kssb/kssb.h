@@ -7,6 +7,7 @@
 // XXX: We really don't want to leave any of API calls as they may use
 // atomic operations. Enabling debugging possibly change the bahavior
 // of store buffer.
+// TODO: Use Linux APIs
 #ifdef __DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
 #else
@@ -15,24 +16,31 @@
 	} while (0)
 #endif
 
-#define _BITS(val) ((val)*8)
-#define BYTES_PER_WORD (uint64_t)(sizeof(void *))
-#define _BIT_MASK(_BITS)                                                       \
-	((_BITS) == 64 ? 0xffffffffffffffff : (1ULL << (_BITS)) - 1)
+enum kssb_access_t { kssb_load, kssb_store };
+
+struct kssb_access {
+	enum kssb_access_t type;
+	// Original access
+	uint64_t *addr;
+	size_t size;
+	uint64_t val;
+	// Aligned to be fit into the store buffer
+	uint64_t aligned_addr;
+	uint64_t aligned_val;
+	uint64_t mask;
+	loff_t offset;
+};
 
 struct buffer_entry {
 	struct hlist_node hlist;
 	struct list_head list;
-	uint64_t *addr;
-	uint64_t val;
-	size_t size;
-	uint64_t *aligned_addr;
-	uint64_t aligned_val;
-	uint64_t mask;
+	struct kssb_access access;
 } __attribute__((aligned(128)));
 
 struct buffer_entry *new_entry(void);
 void reclaim_entry(struct buffer_entry *entry);
 int flush_vector_next(void);
+
+#include "kssb_util.h"
 
 #endif // __KSSB_H
