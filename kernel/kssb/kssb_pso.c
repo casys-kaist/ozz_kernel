@@ -94,7 +94,8 @@ static void __flush_single_entry(uint64_t *dst, uint64_t val, size_t size)
 	}
 }
 
-static void __flush_single_entry_po_preserve(uint64_t *dst, uint64_t *base, uint64_t val, size_t size)
+static void __flush_single_entry_po_preserve(uint64_t *dst, uint64_t *base,
+					     uint64_t val, size_t size)
 {
 	do_buffer_flush(base);
 	__flush_single_entry(dst, val, size);
@@ -113,13 +114,15 @@ static void do_buffer_flush(uint64_t *aligned_addr)
 	struct buffer_entry *entry;
 	struct hlist_node *tmp;
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	bool flush_all = aligned_addr == NULL;
+
 	hash_for_each_safe (pcpu_buffer->table, bkt, tmp, entry, hlist) {
 		// We just need to keep the stores' order only for
 		// those having a same destination
-		if (entry->aligned_addr == aligned_addr || aligned_addr == NULL)
+		if (flush_all || entry->aligned_addr == aligned_addr)
 			flush_single_entry(entry);
 	}
-	BUG_ON(aligned_addr == NULL && !hash_empty(pcpu_buffer->table));
+	BUG_ON(flush_all && !hash_empty(pcpu_buffer->table));
 }
 
 static void do_buffer_flush_n(uint64_t *aligned_addr, int freeing)
@@ -232,6 +235,23 @@ static void do_buffer_store_aligned(uint64_t *addr, uint64_t val, size_t size,
 	do_buffer_flush_after_insn(aligned_addr);
 }
 
+static bool spanning_access(uint64_t *addr, size_t size)
+{
+	// return true if the access spans over two words.
+	return size + (((uint64_t)addr) % 8) > 8;
+}
+
+static void do_spanning_access(uint64_t aligned_addr, uint64_t *add4,
+			       uint64_t val, size_t size)
+{
+	// TEMP: I do know how the real machine works in this
+	// case. To be safe, flush the two words and the store
+	// without emulating the store buffer.
+	do_buffer_flush((uint64_t *)(aligned_addr));
+	do_buffer_flush((uint64_t *)(aligned_addr + 8));
+	__flush_single_entry(addr, val, size);
+}
+
 static void do_buffer_store(uint64_t *addr, uint64_t val, size_t size)
 {
 	uint64_t aligned_addr, aligned_val, mask;
@@ -245,11 +265,8 @@ static void do_buffer_store(uint64_t *addr, uint64_t val, size_t size)
 	aligned_val = val << _BITS(offset);
 	mask = _BIT_MASK(_BITS(size + offset)) & ~_BIT_MASK(_BITS(offset));
 
-	if (size + (((uint64_t)addr) % 8) > 8) {
-		// TODO: unaligned access
-		/* do_buffer_flush(aligned_addr); */
-		/* do_buffer_flush(aligned_addr+8); */
-		__flush_single_entry(addr, val, size);
+	if (spanning_access(addr, size)) {
+		do_spanning_access(aligned_addr, addr, val, size);
 		return;
 	}
 
