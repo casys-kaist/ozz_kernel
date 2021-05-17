@@ -34,6 +34,7 @@ static struct kssb_buffer_entry *latest_entry(struct kssb_access *acc)
 {
 	struct kssb_buffer_entry *entry;
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	BUG_ON(!acc->aligned);
 	hash_for_each_possible (pcpu_buffer->table, entry, hlist,
 				(uint64_t)acc->aligned_addr) {
 		// Two different addrs are possibly mashed into a same
@@ -48,6 +49,7 @@ static void store_entry(struct kssb_buffer_entry *entry,
 			struct kssb_access *acc)
 {
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	BUG_ON(!acc->aligned);
 	hash_add(pcpu_buffer->table, &(entry->hlist),
 		 (uint64_t)acc->aligned_addr);
 }
@@ -109,18 +111,20 @@ static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
 static void do_buffer_flush_after_insn(struct kssb_access *acc)
 {
 	int freeing = flush_vector_next();
+	BUG_ON(!acc->aligned);
 	do_buffer_flush_n(acc->aligned_addr, freeing);
 }
 
 static inline void align_access(struct kssb_access *acc)
 {
-	// Initialization of kssb_access. Maybe called later when it
-	// is really needed.
+	// Align kssb_access to the word. Maybe called later after it
+	// is initialized.
 	acc->aligned_addr = (uint64_t)(acc->addr) & ~(BYTES_PER_WORD - 1);
 	acc->offset = (loff_t)((uint64_t)acc->addr & (BYTES_PER_WORD - 1));
 	acc->aligned_val = acc->val << _BITS(acc->offset);
 	acc->mask = _BIT_MASK(_BITS(acc->size + acc->offset)) &
 		    ~_BIT_MASK(_BITS(acc->offset));
+	acc->aligned = true;
 }
 
 static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
@@ -246,6 +250,7 @@ static void do_buffer_store(struct kssb_access *acc)
 // finished (they use a percpu store buffer). Whenever an interrupt is
 // delivered, the percpu store buffer should be flushed to make sure
 // that the percpu store buffer is not polluted.
+// NOTE: Partial initialization of struct will fill 0 to the remainings
 // TODO: support contexts other than task
 static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 {

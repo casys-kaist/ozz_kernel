@@ -25,6 +25,7 @@ struct kssb_access {
 	size_t size;
 	uint64_t val;
 	// Aligned to be fit into the store buffer
+	bool aligned;
 	uint64_t aligned_addr;
 	uint64_t aligned_val;
 	uint64_t mask;
