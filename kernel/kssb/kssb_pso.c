@@ -135,7 +135,6 @@ static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
 	ret = (entry->access.aligned_val & entry->access.mask) |
 	      (val & ~entry->access.mask);
 	ret >>= _BITS(acc->offset);
-	ret &= _BIT_MASK(_BITS(acc->size));
 	return ret;
 }
 
@@ -147,6 +146,8 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
 		     acc->aligned_addr, acc->offset, acc->size);
 
+	// We don't have to masking upper bits of ret. It will be done
+	// when the value is returned.
 	if ((latest = latest_entry(acc)))
 		ret = __assemble_value(latest, acc);
 	else
@@ -261,10 +262,10 @@ static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (!in_task())
-		ret = __load_single(&acc) & _BIT_MASK(_BITS(size));
-	else
+	if (in_task())
 		ret = do_buffer_load(&acc);
+	else
+		ret = __load_single(&acc);
 	local_irq_restore(flags);
 	return ret;
 }
@@ -277,10 +278,10 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (!in_task())
-		__flush_single_entry_po_preserve(&acc);
-	else
+	if (in_task())
 		do_buffer_store(&acc);
+	else
+		__flush_single_entry_po_preserve(&acc);
 	local_irq_restore(flags);
 }
 
