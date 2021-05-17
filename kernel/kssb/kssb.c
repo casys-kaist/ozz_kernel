@@ -11,38 +11,31 @@
 
 #include "kssb.h"
 
-struct flush_vector {
-	struct rcu_head rcu;
-	int *vector;
-	size_t size;
-	atomic_t index;
-};
-
-struct flush_vector *flush_vector;
+struct kssb_flush_vector *flush_vector;
 
 #define BUFFER_PAGES 4
-// non-contiguous pages storing buffer_entry
+// non-contiguous pages storing kssb_buffer_entry
 void *buffer_entry_pages;
-// cache for free buffer_entry
+// cache for free kssb_buffer_entry
 LIST_HEAD(free_entry_pool);
 
-struct buffer_entry *new_entry()
+struct kssb_buffer_entry *new_entry()
 {
-	struct buffer_entry *entry = list_first_entry_or_null(
-		&free_entry_pool, struct buffer_entry, list);
+	struct kssb_buffer_entry *entry = list_first_entry_or_null(
+		&free_entry_pool, struct kssb_buffer_entry, list);
 	if (entry)
 		list_del_init(&entry->list);
 	return entry;
 }
 
-void reclaim_entry(struct buffer_entry *entry)
+void reclaim_entry(struct kssb_buffer_entry *entry)
 {
 	list_add(&entry->list, &free_entry_pool);
 }
 
 int flush_vector_next()
 {
-	struct flush_vector *vector;
+	struct kssb_flush_vector *vector;
 	int index, ret = 0;
 
 	rcu_read_lock();
@@ -61,15 +54,15 @@ unlock:
 
 static void free_flush_vector(struct rcu_head *rcu)
 {
-	struct flush_vector *vector =
-		container_of(rcu, struct flush_vector, rcu);
+	struct kssb_flush_vector *vector =
+		container_of(rcu, struct kssb_flush_vector, rcu);
 	printk_debug(KERN_INFO "Cleaning up the flush_vector\n");
 	kfree(vector);
 }
 
 static void cleanup_flush_vector(void)
 {
-	struct flush_vector *vector = READ_ONCE(flush_vector);
+	struct kssb_flush_vector *vector = READ_ONCE(flush_vector);
 	if (!vector)
 		return;
 	WRITE_ONCE(flush_vector, NULL);
@@ -78,7 +71,7 @@ static void cleanup_flush_vector(void)
 
 SYSCALL_DEFINE2(ssb_feedinput, unsigned long, uvector, size_t, size)
 {
-	struct flush_vector *vector;
+	struct kssb_flush_vector *vector;
 	void __user *vectorp = (void __user *)uvector;
 	int total_bytes = sizeof(vector->vector[0]) * size;
 
@@ -90,7 +83,8 @@ SYSCALL_DEFINE2(ssb_feedinput, unsigned long, uvector, size_t, size)
 	if (!total_bytes)
 		return 0;
 
-	vector = (struct flush_vector *)kmalloc(sizeof(*vector), GFP_KERNEL);
+	vector = (struct kssb_flush_vector *)kmalloc(sizeof(*vector),
+						     GFP_KERNEL);
 	vector->vector = (int *)kmalloc(total_bytes, GFP_KERNEL);
 	if (copy_from_user(vector->vector, vectorp, total_bytes)) {
 		kfree(vector->vector);
@@ -112,18 +106,18 @@ SYSCALL_DEFINE2(ssb_feedinput, unsigned long, uvector, size_t, size)
 static int __init kssb_init(void)
 {
 	int i, num_entries;
-	struct buffer_entry *ptr;
+	struct kssb_buffer_entry *ptr;
 	size_t buffer_size = BUFFER_PAGES * PAGE_SIZE;
 
 	buffer_entry_pages = vmalloc(buffer_size);
-	num_entries = buffer_size / sizeof(struct buffer_entry);
+	num_entries = buffer_size / sizeof(struct kssb_buffer_entry);
 	printk_debug(KERN_INFO "Allocating pages\n");
 	printk_debug(KERN_INFO "  size       %d\n", buffer_size);
 	printk_debug(KERN_INFO "  entry size %d\n",
-		     sizeof(struct buffer_entry));
+		     sizeof(struct kssb_buffer_entry));
 	printk_debug(KERN_INFO "  entries    %d\n", num_entries);
 	for (i = 0; i < num_entries; i++) {
-		ptr = &((struct buffer_entry *)buffer_entry_pages)[i];
+		ptr = &((struct kssb_buffer_entry *)buffer_entry_pages)[i];
 		reclaim_entry(ptr);
 	}
 

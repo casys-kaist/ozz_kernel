@@ -21,18 +21,18 @@ static DEFINE_PER_CPU(struct storebuffer, buffer) = {
 
 static void do_buffer_flush(uint64_t);
 
-static struct buffer_entry *alloc_entry(struct kssb_access *acc)
+static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 {
-	struct buffer_entry *entry = new_entry();
+	struct kssb_buffer_entry *entry = new_entry();
 	if (!entry)
 		return NULL;
 	memcpy(&entry->access, acc, sizeof(*acc));
 	return entry;
 }
 
-static struct buffer_entry *latest_entry(struct kssb_access *acc)
+static struct kssb_buffer_entry *latest_entry(struct kssb_access *acc)
 {
-	struct buffer_entry *entry;
+	struct kssb_buffer_entry *entry;
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	hash_for_each_possible (pcpu_buffer->table, entry, hlist,
 				(uint64_t)acc->aligned_addr) {
@@ -44,7 +44,8 @@ static struct buffer_entry *latest_entry(struct kssb_access *acc)
 	return NULL;
 }
 
-static void store_entry(struct buffer_entry *entry, struct kssb_access *acc)
+static void store_entry(struct kssb_buffer_entry *entry,
+			struct kssb_access *acc)
 {
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	hash_add(pcpu_buffer->table, &(entry->hlist),
@@ -57,7 +58,7 @@ static void __flush_single_entry_po_preserve(struct kssb_access *acc)
 	__store_single(acc);
 }
 
-static void flush_single_entry(struct buffer_entry *entry)
+static void flush_single_entry(struct kssb_buffer_entry *entry)
 {
 	__store_single(&entry->access);
 	hash_del(&entry->hlist);
@@ -67,7 +68,7 @@ static void flush_single_entry(struct buffer_entry *entry)
 static void do_buffer_flush(uint64_t aligned_addr)
 {
 	int bkt;
-	struct buffer_entry *entry;
+	struct kssb_buffer_entry *entry;
 	struct hlist_node *tmp;
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	bool flush_all = !aligned_addr;
@@ -84,7 +85,7 @@ static void do_buffer_flush(uint64_t aligned_addr)
 static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
 {
 	struct hlist_node *tmp;
-	struct buffer_entry *entry;
+	struct kssb_buffer_entry *entry;
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	int bkt, freed = 0;
 
@@ -122,7 +123,7 @@ static inline void align_access(struct kssb_access *acc)
 		    ~_BIT_MASK(_BITS(acc->offset));
 }
 
-static inline uint64_t __assemble_value(struct buffer_entry *entry,
+static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
 					struct kssb_access *acc)
 {
 	uint64_t ret, val;
@@ -136,7 +137,7 @@ static inline uint64_t __assemble_value(struct buffer_entry *entry,
 
 static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 {
-	struct buffer_entry *latest;
+	struct kssb_buffer_entry *latest;
 	uint64_t ret;
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
@@ -167,7 +168,7 @@ static uint64_t do_buffer_load(struct kssb_access *acc)
 
 static void compose_access(struct kssb_access *acc)
 {
-	struct buffer_entry *latest;
+	struct kssb_buffer_entry *latest;
 	// We need to retrieve the latest value of each bytes when a
 	// load instruction is executed later. I.e., multiple store
 	// instructions can be executed, for example, for 8 bytes at
@@ -194,7 +195,7 @@ static void compose_access(struct kssb_access *acc)
 
 static void do_buffer_store_aligned(struct kssb_access *acc)
 {
-	struct buffer_entry *entry;
+	struct kssb_buffer_entry *entry;
 
 	printk_debug(KERN_INFO "do_buffer_store_aligned (%px, %llx, %llx)\n",
 		     aligned_addr, aligned_val, mask);

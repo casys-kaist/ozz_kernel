@@ -31,14 +31,22 @@ struct kssb_access {
 	loff_t offset;
 };
 
-struct buffer_entry {
+struct kssb_buffer_entry {
 	struct hlist_node hlist;
 	struct list_head list;
 	struct kssb_access access;
 } __attribute__((aligned(128)));
 
-struct buffer_entry *new_entry(void);
-void reclaim_entry(struct buffer_entry *entry);
+struct kssb_buffer_entry *new_entry(void);
+void reclaim_entry(struct kssb_buffer_entry *entry);
+
+struct kssb_flush_vector {
+	struct rcu_head rcu;
+	int *vector;
+	size_t size;
+	atomic_t index;
+};
+
 int flush_vector_next(void);
 
 #include "kssb_util.h"
