@@ -174,10 +174,10 @@ __list_refcounts(void)
 	refcount_t r;
 	refcount_set(&r, 1);
 	refcount_read(&r);
-	refcount_inc_not_zero(&r);
+	(void)refcount_inc_not_zero(&r);
 	refcount_inc(&r);
-	refcount_sub_and_test(0, &r);
-	refcount_dec_and_test(&r);
+	(void)refcount_sub_and_test(0, &r);
+	(void)refcount_dec_and_test(&r);
 }
 
 #if !defined(__clang__) && (defined(__GNUC__) || defined(__GNUG__))
