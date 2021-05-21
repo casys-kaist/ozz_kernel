@@ -285,11 +285,9 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
 	local_irq_restore(flags);
 }
 
-static void __flush_callback_pso(char *addr)
+static void __flush_callback_pso(void)
 {
 	unsigned long flags;
-	// turns out, addr should be NULL
-	BUG_ON(addr != NULL);
 	local_irq_save(flags);
 	// The flush callback should be called regardless of the
 	// context.

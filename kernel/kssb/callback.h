@@ -63,12 +63,12 @@
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_load##_BYTES);
 
 #define __DEFINE_FLUSH_CALLBACK(_MEMORYMODEL)                                  \
-	void __ssb_##_MEMORYMODEL##_flush(char *addr)
+	void __ssb_##_MEMORYMODEL##_flush(void)
 
 #define _DECLARE_FLUSH_CALLBACK(_MEMORYMODEL)                                  \
 	__DEFINE_FLUSH_CALLBACK(_MEMORYMODEL)                                  \
 	{                                                                      \
-		FLUSH_CALLBACK_IMPL(addr);                                     \
+		FLUSH_CALLBACK_IMPL();					\
 	}                                                                      \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_flush);
 
