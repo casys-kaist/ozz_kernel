@@ -7,7 +7,7 @@ struct shared_t {
 	bool ready;
 };
 
-static struct shared_t shared;
+struct shared_t shared;
 
 #define _DO_SLEEP
 
@@ -32,8 +32,10 @@ __attribute__((softstorebuffer)) static void do_reader(void)
 #ifdef _DO_SLEEP
 	mdelay(1000);
 #endif
-	if (ptr->ready)
+	if (ptr->ready) {
 		a = *ptr->ptr;
+		printk("%d\n", a);
+	}
 	local_irq_enable();
 }
 
