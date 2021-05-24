@@ -6,6 +6,7 @@
 #include <linux/init.h>
 #include <linux/vmalloc.h>
 #include <linux/atomic.h>
+#include <linux/percpu.h>
 
 /* #define __DEBUG */
 
@@ -17,23 +18,37 @@ bool kssb_initialized = false;
 EXPORT_SYMBOL(kssb_initialized);
 
 #define BUFFER_PAGES 4
-// non-contiguous pages storing kssb_buffer_entry
-void *buffer_entry_pages;
-// cache for free kssb_buffer_entry
-LIST_HEAD(free_entry_pool);
+// Non-contiguous per-cpu pages storing kssb_buffer_entry
+static DEFINE_PER_CPU(void *, kssb_buffer_pages);
+// Per-cpu cache for free kssb_buffer_entry. As new_entry() is the
+// only consumer of the pool, we can locklessly implement it by using
+// llist, and making sure that there are no two cpus that access the
+// same per-cpu pool. This can be simply enforced by making each cpu
+// to access its own pool.
+static DEFINE_PER_CPU(struct llist_head, kssb_buffer_pool);
 
 struct kssb_buffer_entry *new_entry()
 {
-	struct kssb_buffer_entry *entry = list_first_entry_or_null(
-		&free_entry_pool, struct kssb_buffer_entry, list);
-	if (entry)
-		list_del_init(&entry->list);
+	struct llist_head *pcpu_pool;
+	struct llist_node *llist;
+	struct kssb_buffer_entry *entry = NULL;
+
+	pcpu_pool = &get_cpu_var(kssb_buffer_pool);
+	if ((llist = llist_del_first(pcpu_pool)))
+		entry = container_of(llist, struct kssb_buffer_entry, llist);
+	put_cpu_var(kssb_buffer_pool);
 	return entry;
+}
+
+void __reclaim_entry(struct kssb_buffer_entry *entry, struct llist_head *llist)
+{
+	llist_add(&entry->llist, llist);
 }
 
 void reclaim_entry(struct kssb_buffer_entry *entry)
 {
-	list_add(&entry->list, &free_entry_pool);
+	struct llist_head *llist = per_cpu_ptr(&kssb_buffer_pool, entry->cpu);
+	__reclaim_entry(entry, llist);
 }
 
 int flush_vector_next()
@@ -108,20 +123,31 @@ SYSCALL_DEFINE2(ssb_feedinput, unsigned long, uvector, size_t, size)
 
 static int __init kssb_init(void)
 {
-	int i, num_entries;
+	int i, cpu, num_entries;
+	size_t buffer_size;
 	struct kssb_buffer_entry *ptr;
-	size_t buffer_size = BUFFER_PAGES * PAGE_SIZE;
+	struct llist_head *pcpu_pool;
+	void *pcpu_pages;
 
-	buffer_entry_pages = vmalloc(buffer_size);
+	buffer_size = BUFFER_PAGES * PAGE_SIZE;
 	num_entries = buffer_size / sizeof(struct kssb_buffer_entry);
-	printk_debug(KERN_INFO "Allocating pages\n");
-	printk_debug(KERN_INFO "  size       %d\n", buffer_size);
-	printk_debug(KERN_INFO "  entry size %d\n",
-		     sizeof(struct kssb_buffer_entry));
-	printk_debug(KERN_INFO "  entries    %d\n", num_entries);
-	for (i = 0; i < num_entries; i++) {
-		ptr = &((struct kssb_buffer_entry *)buffer_entry_pages)[i];
-		reclaim_entry(ptr);
+
+	for_each_possible_cpu (cpu) {
+		printk(KERN_INFO "Allocating pages (CPU #%d)\n", cpu);
+		printk(KERN_INFO "  size       %d\n", buffer_size);
+		printk(KERN_INFO "  entry size %d\n",
+		       sizeof(struct kssb_buffer_entry));
+		printk(KERN_INFO "  entries    %d\n", num_entries);
+
+		pcpu_pages = vmalloc(buffer_size);
+		per_cpu(kssb_buffer_pages, cpu) = pcpu_pages;
+		pcpu_pool = per_cpu_ptr(&kssb_buffer_pool, cpu);
+		init_llist_head(pcpu_pool);
+		for (i = 0; i < num_entries; i++) {
+			ptr = &((struct kssb_buffer_entry *)pcpu_pages)[i];
+			ptr->cpu = cpu;
+			__reclaim_entry(ptr, pcpu_pool);
+		}
 	}
 
 	WRITE_ONCE(kssb_initialized, true);
@@ -131,7 +157,12 @@ static int __init kssb_init(void)
 
 static void kssb_cleanup(void)
 {
-	vfree(buffer_entry_pages);
+	int cpu;
+	void *pcpu_page;
+	for_each_possible_cpu (cpu) {
+		pcpu_page = per_cpu(kssb_buffer_pages, cpu);
+		vfree(pcpu_page);
+	}
 	cleanup_flush_vector();
 }
 

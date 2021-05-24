@@ -34,9 +34,10 @@ struct kssb_access {
 
 struct kssb_buffer_entry {
 	struct hlist_node hlist;
-	struct list_head list;
+	struct llist_node llist;
 	struct kssb_access access;
 	pid_t pid;
+	int cpu;
 } __attribute__((aligned(128)));
 
 struct kssb_buffer_entry *new_entry(void);
