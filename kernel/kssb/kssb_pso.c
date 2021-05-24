@@ -210,7 +210,8 @@ static void do_buffer_store_aligned(struct kssb_access *acc)
 	if ((entry = alloc_entry(acc))) {
 		store_entry(entry, acc);
 	} else {
-		WARN_ONCE(1, "Store buffer is exhausted");
+		WARN_ONCE(READ_ONCE(kssb_initialized),
+			  "Store buffer is exhausted");
 		__flush_single_entry_po_preserve(acc);
 	}
 	do_buffer_flush_after_insn(acc);

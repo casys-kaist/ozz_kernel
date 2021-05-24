@@ -52,4 +52,6 @@ int flush_vector_next(void);
 
 #include "kssb_util.h"
 
+extern bool kssb_initialized;
+
 #endif // __KSSB_H

@@ -13,6 +13,9 @@
 
 struct kssb_flush_vector *flush_vector;
 
+bool kssb_initialized = false;
+EXPORT_SYMBOL(kssb_initialized);
+
 #define BUFFER_PAGES 4
 // non-contiguous pages storing kssb_buffer_entry
 void *buffer_entry_pages;
@@ -120,6 +123,8 @@ static int __init kssb_init(void)
 		ptr = &((struct kssb_buffer_entry *)buffer_entry_pages)[i];
 		reclaim_entry(ptr);
 	}
+
+	WRITE_ONCE(kssb_initialized, true);
 
 	return 0;
 }
