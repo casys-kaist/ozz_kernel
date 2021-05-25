@@ -176,9 +176,12 @@ endif
 
 # XXX: Let's not instrument by default for now
 ifeq ($(CONFIG_KSSB),y)
-_c_flags += $(if $(patsubst n%,, \
-		$(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n), \
-		$(CFLAGS_KSSB))
+ifneq ($(patsubst n%,, \
+		$(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),)
+_c_flags += $(CFLAGS_KSSB)
+else
+_c_flags += $(CFLAGS_KSSB_FLUSHONLY)
+endif
 endif
 
 #
