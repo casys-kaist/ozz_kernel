@@ -11,6 +11,8 @@
 KASAN_SANITIZE			:= n
 KCSAN_SANITIZE			:= n
 
+KSSB_INSTRUMENT := N
+
 subdir- := rm
 
 obj-y += init.o
