@@ -5,6 +5,7 @@
 #include <linux/slab.h>
 #include <linux/hashtable.h>
 #include <linux/percpu.h>
+#include <linux/kssb.h>
 
 /* #define __DEBUG */
 
@@ -21,12 +22,32 @@ static DEFINE_PER_CPU(struct storebuffer, buffer) = {
 
 static void do_buffer_flush(uint64_t);
 
+// XXX: Should be defined in kssb.c
+void kssb_print_store_buffer(void)
+{
+	struct kssb_buffer_entry *entry;
+	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	int bkt, cnt = 0;
+
+	pr_alert("Store buffer entries:\n");
+	hash_for_each (pcpu_buffer->table, bkt, entry, hlist) {
+		cnt++;
+		pr_alert("  addr: %px\n", entry->access.addr);
+		pr_alert("size: %ld\n", entry->access.size);
+		pr_alert("  val : %lx\n", entry->access.val);
+		pr_alert("  pid : %d\n", entry->pid);
+	}
+	pr_alert("%d entries", cnt);
+}
+EXPORT_SYMBOL(kssb_print_store_buffer);
+
 static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 {
 	struct kssb_buffer_entry *entry = new_entry();
 	if (!entry)
 		return NULL;
-	memcpy(&entry->access, acc, sizeof(*acc));
+	entry->access = *acc;
+	entry->pid = current->pid;
 	return entry;
 }
 
@@ -275,7 +296,10 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
 {
 	unsigned long flags;
 	struct kssb_access acc = {
-		.addr = addr, .val = val, .size = size, .type = kssb_store
+		.addr = addr,
+		.val = val,
+		.size = size,
+		.type = kssb_store,
 	};
 
 	local_irq_save(flags);

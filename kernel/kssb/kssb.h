@@ -36,6 +36,7 @@ struct kssb_buffer_entry {
 	struct hlist_node hlist;
 	struct list_head list;
 	struct kssb_access access;
+	pid_t pid;
 } __attribute__((aligned(128)));
 
 struct kssb_buffer_entry *new_entry(void);
