@@ -1473,6 +1473,7 @@ struct task_struct {
 #ifdef CONFIG_KRETPROBES
 	struct llist_head               kretprobe_instances;
 #endif
+	bool kssb_enabled;
 
 #ifdef CONFIG_ARCH_HAS_PARANOID_L1D_FLUSH
 	/*

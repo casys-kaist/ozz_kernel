@@ -375,6 +375,7 @@
 500 common ssb_feedinput sys_ssb_feedinput
 501 common ssb_pso_writer sys_ssb_pso_writer
 502 common ssb_pso_reader sys_ssb_pso_reader
+503 common ssb_switch sys_ssb_switch
 
 #
 # Due to a historical design error, certain syscalls are numbered differently

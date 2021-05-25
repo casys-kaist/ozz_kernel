@@ -121,6 +121,12 @@ SYSCALL_DEFINE2(ssb_feedinput, unsigned long, uvector, size_t, size)
 	return 0;
 }
 
+SYSCALL_DEFINE0(ssb_switch)
+{
+	current->kssb_enabled = !current->kssb_enabled;
+	return 0;
+}
+
 static int __init kssb_init(void)
 {
 	int i, cpu, num_entries;

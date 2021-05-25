@@ -284,7 +284,7 @@ static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (in_task())
+	if (in_task() && current->kssb_enabled)
 		ret = do_buffer_load(&acc);
 	else
 		ret = __load_single(&acc);
@@ -303,7 +303,7 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (in_task())
+	if (in_task() && current->kssb_enabled)
 		do_buffer_store(&acc);
 	else
 		__flush_single_entry_po_preserve(&acc);
