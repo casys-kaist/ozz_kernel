@@ -275,6 +275,15 @@ static void do_buffer_store(struct kssb_access *acc)
 // that the percpu store buffer is not polluted.
 // NOTE: Partial initialization of struct will fill 0 to the remainings
 // TODO: support contexts other than task
+static bool kssb_enabled(void)
+{
+#ifdef CONFIG_KSSB_SWITCH
+	return current->kssb_enabled;
+#else
+	return true;
+#endif
+}
+
 static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 {
 	uint64_t ret;
@@ -284,7 +293,7 @@ static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (in_task() && current->kssb_enabled)
+	if (in_task() && kssb_enabled())
 		ret = do_buffer_load(&acc);
 	else
 		ret = __load_single(&acc);
@@ -303,7 +312,7 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (in_task() && current->kssb_enabled)
+	if (in_task() && kssb_enabled())
 		do_buffer_store(&acc);
 	else
 		__flush_single_entry_po_preserve(&acc);

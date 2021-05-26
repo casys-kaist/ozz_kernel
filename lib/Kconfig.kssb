@@ -2,3 +2,8 @@ menuconfig KSSB
 	bool "SoftStoreBuffer"
 	help
 	  Software emulation of store buffer
+
+menuconfig KSSB_SWITCH
+	bool "StoftStoreBuffer switch"
+	help
+	  Using the kssb switch
