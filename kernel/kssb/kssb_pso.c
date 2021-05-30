@@ -231,8 +231,7 @@ static void do_buffer_store_aligned(struct kssb_access *acc)
 	if ((entry = alloc_entry(acc))) {
 		store_entry(entry, acc);
 	} else {
-		WARN_ONCE(READ_ONCE(kssb_initialized),
-			  "Store buffer is exhausted");
+		WARN_ONCE(1, "Store buffer is exhausted");
 		__flush_single_entry_po_preserve(acc);
 	}
 	do_buffer_flush_after_insn(acc);
@@ -277,11 +276,13 @@ static void do_buffer_store(struct kssb_access *acc)
 // TODO: support contexts other than task
 static bool kssb_enabled(void)
 {
+	bool enabled =
 #ifdef CONFIG_KSSB_SWITCH
-	return current->kssb_enabled;
+		current->kssb_enabled;
 #else
-	return true;
+		true;
 #endif
+	return enabled && kssb_initialized;
 }
 
 static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
