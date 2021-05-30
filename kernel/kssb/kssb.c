@@ -122,18 +122,15 @@ SYSCALL_DEFINE2(ssb_feedinput, unsigned long, uvector, size_t, size)
 	return 0;
 }
 
-#ifdef CONFIG_KSSB_SWITCH
 SYSCALL_DEFINE0(ssb_switch)
 {
+#ifdef CONFIG_KSSB_SWITCH
 	current->kssb_enabled = !current->kssb_enabled;
 	return 0;
-}
 #else
-SYSCALL_DEFINE0(ssb_switch)
-{
 	return -EINVAL;
+#endif /* CONFIG_KSSB_SWITCH */
 }
-#endif CONFIG_KSSB_SWITCH
 
 static int __init kssb_init(void)
 {
