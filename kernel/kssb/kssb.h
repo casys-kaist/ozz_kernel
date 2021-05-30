@@ -2,7 +2,7 @@
 #define __KSSB_H
 
 #include <linux/kernel.h>
-#include <linux/list.h>
+#include <linux/llist.h>
 
 // XXX: We really don't want to leave any of API calls as they may use
 // atomic operations. Enabling debugging possibly change the bahavior
@@ -51,6 +51,9 @@ struct kssb_flush_vector {
 };
 
 int flush_vector_next(void);
+
+void assert_context(struct task_struct *);
+void reset_context(void);
 
 #include "kssb_util.h"
 

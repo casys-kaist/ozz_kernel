@@ -104,6 +104,10 @@ static void do_buffer_flush(uint64_t aligned_addr)
 			flush_single_entry(entry);
 	}
 	BUG_ON(flush_all && !hash_empty(pcpu_buffer->table));
+
+	if (flush_all)
+		// Now the store buffer does not contain any entries.
+		reset_context();
 }
 
 static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
@@ -186,6 +190,7 @@ static uint64_t do_buffer_load(struct kssb_access *acc)
 	printk_debug(KERN_INFO "do_buffer_load (%px, %d)\n", acc->addr,
 		     acc->size);
 
+	assert_context(current);
 
 	align_access(acc);
 
@@ -263,6 +268,8 @@ static void do_buffer_store(struct kssb_access *acc)
 {
 	printk_debug(KERN_INFO "do_buffer_store (%px, %llx, %d)\n", acc->addr,
 		     acc->val, acc->size);
+
+	assert_context(current);
 
 	align_access(acc);
 

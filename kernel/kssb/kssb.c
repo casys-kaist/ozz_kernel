@@ -7,6 +7,7 @@
 #include <linux/vmalloc.h>
 #include <linux/atomic.h>
 #include <linux/percpu.h>
+#include <linux/llist.h>
 
 /* #define __DEBUG */
 
