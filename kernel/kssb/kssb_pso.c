@@ -21,6 +21,7 @@ static DEFINE_PER_CPU(struct storebuffer, buffer) = {
 };
 
 static void do_buffer_flush(uint64_t);
+static bool is_spanning_access(struct kssb_access *acc);
 
 // XXX: Should be defined in kssb.c
 void kssb_print_store_buffer(void)
@@ -185,9 +186,13 @@ static uint64_t do_buffer_load(struct kssb_access *acc)
 	printk_debug(KERN_INFO "do_buffer_load (%px, %d)\n", acc->addr,
 		     acc->size);
 
-	// TODO: spanning loads?
 
 	align_access(acc);
+
+	// TODO: spanning loads?
+	if (is_spanning_access(acc))
+		WARN_ONCE(1, "Spanning load: %lu at %px\n", acc->size,
+			  acc->addr);
 
 	return do_buffer_load_aligned(acc);
 }
@@ -240,7 +245,8 @@ static void do_buffer_store_aligned(struct kssb_access *acc)
 static bool is_spanning_access(struct kssb_access *acc)
 {
 	// return true if the access spans over two words.
-	return acc->size + (((uint64_t)acc->addr) % 8) > 8;
+	uint64_t offset = (uint64_t)acc->addr % 8;
+	return acc->size + offset > 8;
 }
 
 static void do_spanning_access(struct kssb_access *acc)
