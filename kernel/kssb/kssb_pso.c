@@ -6,6 +6,7 @@
 #include <linux/hashtable.h>
 #include <linux/percpu.h>
 #include <linux/kssb.h>
+#include <linux/sched/task_stack.h>
 
 /* #define __DEBUG */
 
@@ -65,6 +66,19 @@ static struct kssb_buffer_entry *latest_entry(struct kssb_access *acc)
 			return entry;
 	}
 	return NULL;
+}
+
+static inline bool in_stack_page(struct kssb_access *acc)
+{
+#ifdef CONFIG_X86_64
+	// XXX: We support only the task contex only for now.
+	unsigned long *begin = task_stack_page(current);
+	unsigned long *end   = task_stack_page(current) + THREAD_SIZE;
+	unsigned long *addr = (unsigned long *)acc->addr;
+	return begin <= addr && addr < end;
+#else
+	return false;
+#endif
 }
 
 static void store_entry(struct kssb_buffer_entry *entry,
@@ -286,7 +300,6 @@ static void do_buffer_store(struct kssb_access *acc)
 // delivered, the percpu store buffer should be flushed to make sure
 // that the percpu store buffer is not polluted.
 // NOTE: Partial initialization of struct will fill 0 to the remainings
-// TODO: support contexts other than task
 static bool kssb_enabled(void)
 {
 	bool enabled =
@@ -298,6 +311,9 @@ static bool kssb_enabled(void)
 	return enabled && kssb_initialized;
 }
 
+// TODO: support contexts other than task
+#define CAN_EMULATE_KSSB(acc) (in_task() && kssb_enabled() && !in_stack_page(acc))
+
 static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 {
 	uint64_t ret;
@@ -307,7 +323,7 @@ static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (in_task() && kssb_enabled())
+	if (CAN_EMULATE_KSSB(&acc))
 		ret = do_buffer_load(&acc);
 	else
 		ret = __load_single(&acc);
@@ -326,7 +342,7 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
 	};
 
 	local_irq_save(flags);
-	if (in_task() && kssb_enabled())
+	if (CAN_EMULATE_KSSB(&acc))
 		do_buffer_store(&acc);
 	else
 		__flush_single_entry_po_preserve(&acc);
