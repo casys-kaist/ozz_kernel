@@ -29,16 +29,16 @@ static inline void __store_single(struct kssb_access *acc)
 {
 	switch (acc->size) {
 	case 1:
-		WRITE_ONCE(*(uint8_t *)acc->addr, acc->val);
+		WRITE_ONCE(*(uint8_t *)acc->addr, (uint8_t)acc->val);
 		break;
 	case 2:
-		WRITE_ONCE(*(uint16_t *)acc->addr, acc->val);
+		WRITE_ONCE(*(uint16_t *)acc->addr, (uint16_t)acc->val);
 		break;
 	case 4:
-		WRITE_ONCE(*(uint32_t *)acc->addr, acc->val);
+		WRITE_ONCE(*(uint32_t *)acc->addr, (uint32_t)acc->val);
 		break;
 	case 8:
-		WRITE_ONCE(*(uint64_t *)acc->addr, acc->val);
+		WRITE_ONCE(*(uint64_t *)acc->addr, (uint64_t)acc->val);
 		break;
 	default:
 		BUG();
