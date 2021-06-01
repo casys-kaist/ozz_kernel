@@ -23,6 +23,7 @@ static DEFINE_PER_CPU(struct storebuffer, buffer) = {
 
 static void do_buffer_flush(uint64_t);
 static bool is_spanning_access(struct kssb_access *acc);
+static void flush_spanning_access(struct kssb_access *acc);
 
 // XXX: Should be defined in kssb.c
 void kssb_print_store_buffer(void)
@@ -208,10 +209,10 @@ static uint64_t do_buffer_load(struct kssb_access *acc)
 
 	align_access(acc);
 
-	// TODO: spanning loads?
-	if (is_spanning_access(acc))
-		WARN_ONCE(1, "Spanning load: %lu at %px\n", acc->size,
-			  acc->addr);
+	if (is_spanning_access(acc)) {
+		flush_spanning_access(acc);
+		return __load_single(acc);
+	}
 
 	return do_buffer_load_aligned(acc);
 }
@@ -268,14 +269,13 @@ static bool is_spanning_access(struct kssb_access *acc)
 	return acc->size + offset > 8;
 }
 
-static void do_spanning_access(struct kssb_access *acc)
+static void flush_spanning_access(struct kssb_access *acc)
 {
 	// TEMP: I do know how the real machine works in this
 	// case. To be safe, flush the two words and the store
 	// without emulating the store buffer.
 	do_buffer_flush(acc->aligned_addr);
 	do_buffer_flush(acc->aligned_addr + 8);
-	__store_single(acc);
 }
 
 static void do_buffer_store(struct kssb_access *acc)
@@ -288,7 +288,8 @@ static void do_buffer_store(struct kssb_access *acc)
 	align_access(acc);
 
 	if (is_spanning_access(acc)) {
-		do_spanning_access(acc);
+		flush_spanning_access(acc);
+		__store_single(acc);
 		return;
 	}
 
