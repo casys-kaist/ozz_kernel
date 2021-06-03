@@ -6,6 +6,7 @@
 #include <linux/kernel.h>
 #include <linux/atomic.h>
 #include <linux/bitops.h>
+#include <linux/refcount.h>
 
 #if defined(__clang__)
 #pragma clang optimize off
