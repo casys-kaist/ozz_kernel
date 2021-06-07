@@ -34,7 +34,8 @@ void assert_context(struct task_struct *ctx)
 
 	if (unlikely(prev && !is_same_context(prev, ctx))) {
 		WRITE_ONCE(assert_failed, true);
-		WARN_ONCE(1,
+		WARN_ONCE(
+			1,
 			"The context invariant is violated prev: %px, running: %px",
 			prev, current);
 	}

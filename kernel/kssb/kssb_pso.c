@@ -74,7 +74,7 @@ static inline bool in_stack_page(struct kssb_access *acc)
 #ifdef CONFIG_X86_64
 	// XXX: We support only the task contex only for now.
 	unsigned long *begin = task_stack_page(current);
-	unsigned long *end   = task_stack_page(current) + THREAD_SIZE;
+	unsigned long *end = task_stack_page(current) + THREAD_SIZE;
 	unsigned long *addr = (unsigned long *)acc->addr;
 	return begin <= addr && addr < end;
 #else
@@ -99,6 +99,14 @@ static void __flush_single_entry_po_preserve(struct kssb_access *acc)
 
 static void flush_single_entry(struct kssb_buffer_entry *entry)
 {
+	// We try our best to populate the page table entry before
+	// storing the entry in the store callback. So here we expect
+	// page table entries present for all entries. Although this
+	// is not always true, we just BUG_ON() to panic the kernel so
+	// the fuzzer can filter out the false alarm when our
+	// expectation is not met.
+	/* BUG_ON(in_page_fault_handler() && */
+	/*        kssb_page_net_present(&entry->access)); */
 	__store_single(&entry->access);
 	hash_del(&entry->hlist);
 	reclaim_entry(entry);
@@ -278,6 +286,15 @@ static void flush_spanning_access(struct kssb_access *acc)
 	do_buffer_flush(acc->aligned_addr + 8);
 }
 
+static inline void populate_store_buffer(struct kssb_access *acc)
+{
+	// We do not support the store buffer emulation in contexts
+	// other than task. So it is guaranteed that this function is
+	// not called in the page fault, meaning loading a value does
+	// not cause infinitely recursive page faults.
+	(void)__load_single(acc);
+}
+
 static void do_buffer_store(struct kssb_access *acc)
 {
 	printk_debug(KERN_INFO "do_buffer_store (%px, %llx, %d)\n", acc->addr,
@@ -286,6 +303,13 @@ static void do_buffer_store(struct kssb_access *acc)
 	assert_context(current);
 
 	align_access(acc);
+
+	// We need to populate the page table entry for acc before
+	// storing the entry. Otherwise, the page fault may occurs
+	// when flushing the entry later and the page fault handler
+	// will try to flush it again at its entry point, causing
+	// infinitely recursive page faults.
+	populate_store_buffer(acc);
 
 	if (is_spanning_access(acc)) {
 		flush_spanning_access(acc);
@@ -313,7 +337,8 @@ static bool kssb_enabled(void)
 }
 
 // TODO: support contexts other than task
-#define CAN_EMULATE_KSSB(acc) (in_task() && kssb_enabled() && !in_stack_page(acc))
+#define CAN_EMULATE_KSSB(acc)                                                  \
+	(in_task() && kssb_enabled() && !in_stack_page(acc))
 
 static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 {
