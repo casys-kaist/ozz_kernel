@@ -385,8 +385,20 @@ static void __flush_callback_pso(void)
 	local_irq_restore(flags);
 }
 
+static bool is_instrumented_address(void *ret)
+{
+	return false;
+}
+
+static void __retchk_callback_pso(void *ret)
+{
+	if (!is_instrumented_address(ret))
+		__flush_callback_pso();
+}
+
 #define MEMORYMODEL pso
 #define STORE_CALLBACK_IMPL __store_callback_pso
 #define LOAD_CALLBACK_IMPL __load_callback_pso
 #define FLUSH_CALLBACK_IMPL __flush_callback_pso
+#define RETCHK_CALLBACK_IMPL __retchk_callback_pso
 #include "callback.h"

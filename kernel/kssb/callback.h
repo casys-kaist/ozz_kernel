@@ -72,8 +72,21 @@
 	}                                                                      \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_flush);
 
+#define __DEFINE_RETCHK_CALLBACK(_MEMORYMODEL)                                 \
+	void __ssb_##_MEMORYMODEL##_retchk(void *ret)
+
+#define _DECLARE_RETCHK_CALLBACK(_MEMORYMODEL)                                 \
+	__DEFINE_RETCHK_CALLBACK(_MEMORYMODEL)                                 \
+	{                                                                      \
+		RETCHK_CALLBACK_IMPL(ret);                                     \
+	}                                                                      \
+	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_retchk);
+
 #define DECLARE_FLUSH_CALLBACK(_MEMORYMODEL)                                   \
 	_DECLARE_FLUSH_CALLBACK(_MEMORYMODEL)
+
+#define DECLARE_RETCHK_CALLBACK(_MEMORYMODEL)                                  \
+	_DECLARE_RETCHK_CALLBACK(_MEMORYMODEL)
 
 #define __DECLARE_STORE_LOAD_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)             \
 	__DECLARE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)                  \
@@ -87,4 +100,5 @@ DECLARE_STORE_LOAD_CALLBACK(1);
 DECLARE_STORE_LOAD_CALLBACK(2);
 DECLARE_STORE_LOAD_CALLBACK(4);
 DECLARE_STORE_LOAD_CALLBACK(8);
-DECLARE_FLUSH_CALLBACK(MEMORYMODEL)
+DECLARE_FLUSH_CALLBACK(MEMORYMODEL);
+DECLARE_RETCHK_CALLBACK(MEMORYMODEL);
