@@ -5,8 +5,9 @@
 #include <linux/slab.h>
 #include <linux/hashtable.h>
 #include <linux/percpu.h>
-#include <linux/kssb.h>
 #include <linux/sched/task_stack.h>
+#include <linux/kssb.h>
+#include <linux/kmemcov.h>
 
 /* #define __DEBUG */
 
@@ -348,6 +349,7 @@ static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 		.addr = addr, .val = 0, .size = size, .type = kssb_load
 	};
 
+	__sanitize_memcov_trace_load(_RET_IP_, addr, size);
 	local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		ret = do_buffer_load(&acc);
@@ -361,12 +363,10 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
 {
 	unsigned long flags;
 	struct kssb_access acc = {
-		.addr = addr,
-		.val = val,
-		.size = size,
-		.type = kssb_store,
+		.addr = addr, .val = val, .size = size, .type = kssb_store
 	};
 
+	__sanitize_memcov_trace_store(_RET_IP_, addr, size);
 	local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		do_buffer_store(&acc);
