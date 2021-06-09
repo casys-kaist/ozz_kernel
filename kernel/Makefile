@@ -112,6 +112,7 @@ obj-$(CONFIG_CPU_PM) += cpu_pm.o
 obj-$(CONFIG_BPF) += bpf/
 obj-$(CONFIG_KCSAN) += kcsan/
 obj-$(CONFIG_KSSB) += kssb/
+obj-$(CONFIG_KMEMCOV) += kmemcov/
 obj-$(CONFIG_SHADOW_CALL_STACK) += scs.o
 obj-$(CONFIG_HAVE_STATIC_CALL_INLINE) += static_call.o
 obj-$(CONFIG_CFI_CLANG) += cfi.o

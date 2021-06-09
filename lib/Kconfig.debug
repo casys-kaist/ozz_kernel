@@ -583,6 +583,7 @@ source "lib/Kconfig.kgdb"
 source "lib/Kconfig.ubsan"
 source "lib/Kconfig.kcsan"
 source "lib/Kconfig.kssb"
+source "lib/Kconfig.kmemcov"
 
 endmenu
 

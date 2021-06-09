@@ -1,0 +1,4 @@
+menuconfig KMEMCOV
+    bool "Read-from coverage"
+	help
+	  Read-from coverage to capture interleaving coverage and instruction reordering coverage

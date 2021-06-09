@@ -1,0 +1,7 @@
+KSSB_INSTRUMENT := N
+KCSAN_SANITIZE := n
+KASAN_SANITIZE := n
+KCOV_INSTRUMENT := n
+UBSAN_SANITIZE := n
+
+obj-y += kmemcov.o
