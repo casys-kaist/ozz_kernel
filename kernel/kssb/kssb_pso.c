@@ -48,8 +48,16 @@ EXPORT_SYMBOL(kssb_print_store_buffer);
 static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 {
 	struct kssb_buffer_entry *entry = new_entry();
-	if (!entry)
-		return NULL;
+	if (entry)
+		goto success;
+	// The store buffer is exhausted. Let's flush the store buffer
+	// and give a second shot.
+	do_buffer_flush(0);
+	entry = new_entry();
+	if (entry)
+		goto success;
+	return NULL;
+success:
 	entry->access = *acc;
 	entry->pid = current->pid;
 	return entry;
