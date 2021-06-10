@@ -145,6 +145,16 @@ SYSCALL_DEFINE0(ssb_switch)
 #endif /* CONFIG_KSSB_SWITCH */
 }
 
+static void kssb_populate_pcpu_pages(unsigned long *pcpu_pages,
+				     unsigned long size)
+{
+	unsigned long total = size / sizeof(unsigned long);
+	unsigned long stride = PAGE_SIZE / sizeof(unsigned long);
+	unsigned long offset;
+	for (offset = 0; offset < total; offset += stride)
+		READ_ONCE(pcpu_pages[offset]);
+}
+
 static int __init kssb_init(void)
 {
 	int i, cpu, num_entries;
@@ -164,6 +174,9 @@ static int __init kssb_init(void)
 		printk(KERN_INFO "  entries    %d\n", num_entries);
 
 		pcpu_pages = vmalloc(buffer_size);
+
+		kssb_populate_pcpu_pages(pcpu_pages, buffer_size);
+
 		per_cpu(kssb_buffer_pages, cpu) = pcpu_pages;
 		pcpu_pool = per_cpu_ptr(&kssb_buffer_pool, cpu);
 		init_llist_head(pcpu_pool);
