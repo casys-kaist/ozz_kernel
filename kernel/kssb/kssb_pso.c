@@ -247,6 +247,9 @@ static void compose_access(struct kssb_access *acc)
 	// load instruction while also keeping the original arguments
 	// for a later flush.
 	if ((latest = latest_entry(acc))) {
+#ifdef CONFIG_KSSB_BINARY
+		do_buffer_flush(acc->aligned_addr);
+#else
 		// We have an entry for addr in the store
 		// buffer. aligned_val must be filled with 0 for newly
 		// masked bits.
@@ -255,6 +258,7 @@ static void compose_access(struct kssb_access *acc)
 			 ~acc->mask) |
 			(acc->aligned_val & acc->mask);
 		acc->mask |= latest->access.mask;
+#endif
 	}
 
 	printk_debug(KERN_INFO "new_val: %llx new_mask %llx\n",
