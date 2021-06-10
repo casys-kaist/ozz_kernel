@@ -341,7 +341,7 @@ static bool kssb_enabled(void)
 #define CAN_EMULATE_KSSB(acc)                                                  \
 	(in_task() && kssb_enabled() && !in_stack_page(acc))
 
-static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
+static __always_inline uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 {
 	uint64_t ret;
 	unsigned long flags;
@@ -359,7 +359,8 @@ static uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	return ret;
 }
 
-static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size)
+static __always_inline void __store_callback_pso(uint64_t *addr, uint64_t val,
+						 size_t size)
 {
 	unsigned long flags;
 	struct kssb_access acc = {
