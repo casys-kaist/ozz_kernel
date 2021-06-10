@@ -27,11 +27,12 @@ __attribute__((softstorebuffer)) static void do_writer(void)
 __attribute__((softstorebuffer)) static void do_reader(void)
 {
 	int a;
-	struct shared_t *ptr = (struct shared_t *)&shared;
-	local_irq_disable();
+	struct shared_t *ptr;
 #ifdef _DO_SLEEP
 	mdelay(1000);
 #endif
+	ptr = (struct shared_t *)&shared;
+	local_irq_disable();
 	if (ptr->ready) {
 		a = *ptr->ptr;
 		printk("%d\n", a);
@@ -53,6 +54,7 @@ SYSCALL_DEFINE0(ssb_pso_reader)
 
 SYSCALL_DEFINE0(pso_clear)
 {
+	shared.ready = false;
 	kfree(shared.ptr);
 	return 0;
 }

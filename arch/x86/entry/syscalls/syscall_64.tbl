@@ -376,6 +376,7 @@
 501 common ssb_pso_writer sys_ssb_pso_writer
 502 common ssb_pso_reader sys_ssb_pso_reader
 503 common ssb_switch sys_ssb_switch
+504 common pso_clear sys_pso_clear
 
 #
 # Due to a historical design error, certain syscalls are numbered differently
