@@ -21,6 +21,7 @@ enum kssb_access_t { kssb_load, kssb_store };
 struct kssb_access {
 	enum kssb_access_t type;
 	// Original access
+	unsigned long inst;
 	uint64_t *addr;
 	size_t size;
 	uint64_t val;
@@ -50,7 +51,7 @@ struct kssb_flush_vector {
 	atomic_t index;
 };
 
-int flush_vector_next(void);
+int flush_vector_next(unsigned long);
 
 void assert_context(struct task_struct *);
 void reset_context(void);

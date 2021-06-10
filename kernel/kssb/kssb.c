@@ -8,6 +8,7 @@
 #include <linux/atomic.h>
 #include <linux/percpu.h>
 #include <linux/llist.h>
+#include <linux/hash.h>
 
 /* #define __DEBUG */
 
@@ -52,7 +53,7 @@ void reclaim_entry(struct kssb_buffer_entry *entry)
 	__reclaim_entry(entry, llist);
 }
 
-int flush_vector_next()
+int flush_vector_next(unsigned long inst)
 {
 	struct kssb_flush_vector *vector;
 	int index, ret = 0;
@@ -63,7 +64,19 @@ int flush_vector_next()
 	if (!vector || !vector->size || !vector->vector)
 		goto unlock;
 
-	index = ((unsigned int)atomic_fetch_inc(&vector->index)) % vector->size;
+	// Let's make retriveing the flush vector more reliable. If
+	// the return address of the kssb callbacks is given, index
+	// the flush vector using the hash value of it. Note that this
+	// does not always return the same index across kernel builds
+	// since the return address possibly varies. Rather, this is
+	// intended to be used to reproduce the crash using the same
+	// binary.
+	if (unlikely(!inst))
+		index = ((unsigned int)atomic_fetch_inc(&vector->index)) %
+			vector->size;
+	else
+		index = hash_64_generic(inst, 64) % vector->size;
+
 	BUG_ON(index < 0 || index >= vector->size);
 	ret = vector->vector[index];
 unlock:

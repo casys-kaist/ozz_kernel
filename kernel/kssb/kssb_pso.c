@@ -160,7 +160,7 @@ static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
 
 static void do_buffer_flush_after_insn(struct kssb_access *acc)
 {
-	int freeing = flush_vector_next();
+	int freeing = flush_vector_next(acc->inst);
 	BUG_ON(!acc->aligned);
 	do_buffer_flush_n(acc->aligned_addr, freeing);
 }
@@ -341,15 +341,23 @@ static bool kssb_enabled(void)
 #define CAN_EMULATE_KSSB(acc)                                                  \
 	(in_task() && kssb_enabled() && !in_stack_page(acc))
 
+#define INIT_KSSB_ACCESS(_addr, _val, _size, _type)                            \
+	{                                                                      \
+		.inst = _RET_IP_, .addr = _addr, .val = _val, .size = _size,   \
+		.type = _type,                                                 \
+	}
+#define INIT_KSSB_LOAD(_addr, _size)                                           \
+	INIT_KSSB_ACCESS(_addr, 0, _size, kssb_load)
+#define INIT_KSSB_STORE(_addr, _val, _size)                                    \
+	INIT_KSSB_ACCESS(_addr, _val, _size, kssb_store)
+
 static __always_inline uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 {
 	uint64_t ret;
 	unsigned long flags;
-	struct kssb_access acc = {
-		.addr = addr, .val = 0, .size = size, .type = kssb_load
-	};
+	struct kssb_access acc = INIT_KSSB_LOAD(addr, size);
 
-	__sanitize_memcov_trace_load(_RET_IP_, addr, size);
+	__sanitize_memcov_trace_load(acc.inst, addr, size);
 	local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		ret = do_buffer_load(&acc);
@@ -363,11 +371,9 @@ static __always_inline void __store_callback_pso(uint64_t *addr, uint64_t val,
 						 size_t size)
 {
 	unsigned long flags;
-	struct kssb_access acc = {
-		.addr = addr, .val = val, .size = size, .type = kssb_store
-	};
+	struct kssb_access acc = INIT_KSSB_STORE(addr, val, size);
 
-	__sanitize_memcov_trace_store(_RET_IP_, addr, size);
+	__sanitize_memcov_trace_store(acc.inst, addr, size);
 	local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		do_buffer_store(&acc);
