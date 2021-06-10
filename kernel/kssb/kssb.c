@@ -36,7 +36,7 @@ struct kssb_buffer_entry *new_entry()
 	struct kssb_buffer_entry *entry = NULL;
 
 	pcpu_pool = &get_cpu_var(kssb_buffer_pool);
-	if ((llist = llist_del_first(pcpu_pool)))
+	if ((llist = __llist_del_first(pcpu_pool)))
 		entry = container_of(llist, struct kssb_buffer_entry, llist);
 	put_cpu_var(kssb_buffer_pool);
 	return entry;
@@ -44,7 +44,7 @@ struct kssb_buffer_entry *new_entry()
 
 void __reclaim_entry(struct kssb_buffer_entry *entry, struct llist_head *llist)
 {
-	llist_add(&entry->llist, llist);
+	___llist_add_batch(&entry->llist, &entry->llist, llist);
 }
 
 void reclaim_entry(struct kssb_buffer_entry *entry)

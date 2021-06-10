@@ -3,6 +3,8 @@
 
 #include <linux/kernel.h>
 #include <linux/llist.h>
+#include <linux/init.h>
+#include <linux/sched.h>
 
 // XXX: We really don't want to leave any of API calls as they may use
 // atomic operations. Enabling debugging possibly change the bahavior
@@ -55,6 +57,10 @@ int flush_vector_next(unsigned long);
 
 void assert_context(struct task_struct *);
 void reset_context(void);
+
+struct llist_node *__llist_del_first(struct llist_head *head);
+bool ___llist_add_batch(struct llist_node *new_first,
+			struct llist_node *new_last, struct llist_head *head);
 
 #include "kssb_util.h"
 

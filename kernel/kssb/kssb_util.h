@@ -1,6 +1,8 @@
 #ifndef __KSSB_UTIL_H
 #define __KSSB_UTIL_H
 
+#include <linux/bug.h>
+
 // TODO: Use Linux APIs
 
 #define BYTES_PER_WORD (uint64_t)(sizeof(void *))
