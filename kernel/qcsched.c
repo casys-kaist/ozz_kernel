@@ -1,6 +1,6 @@
 #include <linux/qcsched.h>
 
-static noinline void __qcsched_hook(void)
+noinline void __qcsched_hook(void)
 {
 }
 
