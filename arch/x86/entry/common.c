@@ -19,6 +19,7 @@
 #include <linux/nospec.h>
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
+#include <linux/qcsched.h>
 
 #ifdef CONFIG_XEN_PV
 #include <xen/xen-ops.h>
@@ -75,6 +76,7 @@ __visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
 	add_random_kstack_offset();
 	nr = syscall_enter_from_user_mode(regs, nr);
 
+	qcsched_hook_entry();
 	instrumentation_begin();
 
 	if (!do_syscall_x64(regs, nr) && !do_syscall_x32(regs, nr) && nr != -1) {
@@ -83,6 +85,7 @@ __visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
 	}
 
 	instrumentation_end();
+	qcsched_hook_exit();
 	syscall_exit_to_user_mode(regs);
 }
 #endif
