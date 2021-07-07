@@ -1,0 +1,4 @@
+menuconfig RELRAZZER
+	bool "relrazzer"
+	help
+	  Stuffs related to relrazzer
