@@ -9,28 +9,24 @@ struct shared_t {
 
 struct shared_t shared;
 
-#define _DO_SLEEP
-
-__attribute__((softstorebuffer)) static void do_writer(void)
+__attribute__((softstorebuffer)) static void do_writer(bool do_sleep)
 {
 	struct shared_t *ptr = (struct shared_t *)&shared;
 	int *iptr = (int *)kmalloc(sizeof(*ptr->ptr), GFP_KERNEL);
 	local_irq_disable();
 	ptr->ptr = iptr;
 	ptr->ready = true;
-#ifdef _DO_SLEEP
-	mdelay(3000);
-#endif
+	if (do_sleep)
+		mdelay(3000);
 	local_irq_enable();
 }
 
-__attribute__((softstorebuffer)) static void do_reader(void)
+__attribute__((softstorebuffer)) static void do_reader(bool do_sleep)
 {
 	int a;
 	struct shared_t *ptr;
-#ifdef _DO_SLEEP
-	mdelay(1000);
-#endif
+	if (do_sleep)
+		mdelay(1000);
 	ptr = (struct shared_t *)&shared;
 	local_irq_disable();
 	if (ptr->ready) {
@@ -40,15 +36,15 @@ __attribute__((softstorebuffer)) static void do_reader(void)
 	local_irq_enable();
 }
 
-SYSCALL_DEFINE0(ssb_pso_writer)
+SYSCALL_DEFINE1(ssb_pso_writer, bool, do_sleep)
 {
-	do_writer();
+	do_writer(do_sleep);
 	return 0;
 }
 
-SYSCALL_DEFINE0(ssb_pso_reader)
+SYSCALL_DEFINE1(ssb_pso_reader, bool, do_sleep)
 {
-	do_reader();
+	do_reader(do_sleep);
 	return 0;
 }
 
