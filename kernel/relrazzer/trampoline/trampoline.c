@@ -41,9 +41,9 @@ static int __init trampoline_init(void)
 	unsigned long __trampoline_addr = (unsigned long)__trampoline;
 	pr_info("Installing trampoline\n");
 	pr_info("trampoline addr: %lx\n", trampoline_addr);
-	hypercall(HCALL_VMI_FUNC_ADDR, VMI_TRAMPOLINE, trampoline_addr, 0);
+	hypercall(HCALL_VMI_HINT, VMI_TRAMPOLINE, trampoline_addr, 0);
 	pr_info("__trampoline addr: %lx\n", __trampoline_addr);
-	hypercall(HCALL_VMI_FUNC_ADDR, VMI_TRAMPOLINE + 1, __trampoline_addr,
+	hypercall(HCALL_VMI_HINT, VMI_TRAMPOLINE + 1, __trampoline_addr,
 		  0);
 	return 0;
 }
