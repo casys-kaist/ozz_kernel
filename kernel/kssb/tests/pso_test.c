@@ -9,10 +9,9 @@ struct shared_t {
 
 struct shared_t shared;
 
-noinline void pso_test_breakpoint(void)
+static noinline void pso_test_breakpoint(void)
 {
 }
-EXPORT_SYMBOL(pso_test_breakpoint);
 
 __attribute__((softstorebuffer)) static void do_writer(bool do_sleep)
 {
@@ -20,8 +19,8 @@ __attribute__((softstorebuffer)) static void do_writer(bool do_sleep)
 	int *iptr = (int *)kmalloc(sizeof(*ptr->ptr), GFP_KERNEL);
 	local_irq_disable();
 	ptr->ptr = iptr;
-	pso_test_breakpoint();
 	ptr->ready = true;
+	pso_test_breakpoint();
 	if (do_sleep)
 		mdelay(3000);
 	local_irq_enable();
