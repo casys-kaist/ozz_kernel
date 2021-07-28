@@ -177,5 +177,11 @@ static void kssb_cleanup(void)
 	cleanup_flush_vector();
 }
 
+// Hypervisor-controllable switch to turn on/off the store buffer
+// emulation. This is different with KSSB_SWITCH that allows the
+// per-task emulation. NOTE: Should be volatile since there is no
+// statement that changes the value in source codes.
+volatile char __ssb_do_emulate = false;
+
 module_init(kssb_init);
 module_exit(kssb_cleanup);
