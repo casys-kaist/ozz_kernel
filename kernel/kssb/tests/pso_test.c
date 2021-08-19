@@ -59,6 +59,9 @@ SYSCALL_DEFINE1(ssb_pso_reader, bool, do_sleep)
 SYSCALL_DEFINE0(pso_clear)
 {
 	shared.ready = false;
-	kfree(shared.ptr);
+	if (shared.ptr != NULL) {
+		kfree(shared.ptr);
+		shared.ptr = NULL;
+	}
 	return 0;
 }
