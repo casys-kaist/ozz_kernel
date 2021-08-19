@@ -18,11 +18,14 @@
 #define HCALL_DEACTIVATE_BP 0xf327524f
 #define HCALL_CLEAR_BP 0xba220681
 #define HCALL_VMI_HINT 0x7ca889f0
+#define HCALL_ENABLE_KSSB 0x3dcb4536
+#define HCALL_DISABLE_KSSB 0xbed348f5
 
 // Subcommands for HCALL_VMI_HINT (saved in kvm_run->hypercall.args[1])
 #define VMI_TRAMPOLINE 0x939aef52
 #define VMI_HOOK 0x30f4b16
 #define VMI_CURRENT_TASK 0xfb40de5
 #define VMI__PER_CPU_OFFSET0 0x4a157131
+#define VMI__SSB_DO_EMULATE 0xdb17901
 
 #endif /* __HCALL_CONSTANT_H */

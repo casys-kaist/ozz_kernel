@@ -12,6 +12,8 @@ MODULE_AUTHOR("Dae R. Jeong");
 MODULE_DESCRIPTION("VMI helper module");
 MODULE_VERSION("0.01");
 
+extern volatile char __ssb_do_emulate;
+
 static int __init vmihelper_init(void)
 {
 	char *hook_name = "qcsched_hook_entry";
@@ -38,6 +40,10 @@ static int __init vmihelper_init(void)
 		hypercall(HCALL_VMI_HINT, VMI__PER_CPU_OFFSET0 + i,
 			  __per_cpu_offset[i], 0);
 	}
+
+	pr_info("__ssb_do_emulate: %lx\n", &__ssb_do_emulate);
+	hypercall(HCALL_VMI_HINT, VMI__SSB_DO_EMULATE,
+		  (unsigned long)&__ssb_do_emulate, 0);
 
 	return 0;
 }
