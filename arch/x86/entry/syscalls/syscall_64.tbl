@@ -378,6 +378,11 @@
 503 common ssb_switch sys_ssb_switch
 504 common pso_clear sys_pso_clear
 
+505 common ssb_sbitmap_init sys_ssb_sbitmap_init
+506 common ssb_sbitmap_func1 sys_ssb_sbitmap_func1
+507 common ssb_sbitmap_func2 sys_ssb_sbitmap_func2
+508 common ssb_sbitmap_clear sys_ssb_sbitmap_clear
+
 #
 # Due to a historical design error, certain syscalls are numbered differently
 # in x32 as compared to native x86_64.  These syscalls have numbers 512-547.
