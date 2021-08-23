@@ -7,13 +7,13 @@
 struct sbitmap_queue sbq;
 
 unsigned int val;
-unsigned int * ptr;
+unsigned int *ptr;
 
 // function 1 -> get sbitmap, change value of ptr, release sbitmap
 __attribute__((softstorebuffer)) static void func1()
 {
 	int idx;
-    unsigned int cpu;
+	unsigned int cpu;
 
 	idx = sbitmap_queue_get(&sbq, &cpu);
 	ptr = NULL;
@@ -23,18 +23,18 @@ __attribute__((softstorebuffer)) static void func1()
 	// release bit in sbitmap_deferred_clear_bit
 	sbitmap_queue_clear(&sbq, idx, cpu);
 
-	return ;
+	return;
 }
 
 // function 2-> get sbitmap, write memory through ptr, release sbitmap
 __attribute__((softstorebuffer)) static void func2()
 {
 	int idx;
-    unsigned int cpu;
+	unsigned int cpu;
 
 	idx = sbitmap_queue_get(&sbq, &cpu);
-    *ptr = 0xdeadbeef;
-    sbitmap_queue_clear(&sbq, idx, cpu);
+	*ptr = 0xdeadbeef;
+	sbitmap_queue_clear(&sbq, idx, cpu);
 }
 
 SYSCALL_DEFINE0(ssb_sbitmap_func1)
@@ -52,22 +52,23 @@ SYSCALL_DEFINE0(ssb_sbitmap_func2)
 SYSCALL_DEFINE0(ssb_sbitmap_init)
 {
 	int ret = 0;
-    unsigned int cpu;
+	unsigned int cpu;
 
-    // init sbitmap_queue
-    cpu = get_cpu();
-    put_cpu();
+	// init sbitmap_queue
+	cpu = get_cpu();
+	put_cpu();
 
-    // capacity 1
-    ret = sbitmap_queue_init_node(&sbq, 1, -1, 0, GFP_KERNEL, cpu_to_node(cpu));
-    if(ret){
-         printk(KERN_ALERT "%s failed with %d\n",
-           "sbitmap_queue_init_node", ret);
-        return ret;
-    }
+	// capacity 1
+	ret = sbitmap_queue_init_node(&sbq, 1, -1, 0, GFP_KERNEL,
+				      cpu_to_node(cpu));
+	if (ret) {
+		printk(KERN_ALERT "%s failed with %d\n",
+		       "sbitmap_queue_init_node", ret);
+		return ret;
+	}
 
 	// init ptr
-    ptr = &val;
+	ptr = &val;
 
 	printk("ssb sbitmap init complete!\n");
 	return ret;

@@ -21,7 +21,8 @@ __attribute__((softstorebuffer)) static void do_writer(bool do_sleep,
 {
 	struct shared_t *ptr = (struct shared_t *)&shared;
 	int *iptr = (int *)kmalloc(sizeof(*ptr->ptr), GFP_KERNEL);
-	printk(KERN_INFO "%s: do_sleep: %d disable_irq: %d\n", __func__, do_sleep, disable_irq);
+	printk(KERN_INFO "%s: do_sleep: %d disable_irq: %d\n", __func__,
+	       do_sleep, disable_irq);
 	if (disable_irq)
 		local_irq_disable();
 	ptr->ptr = iptr;
@@ -38,7 +39,8 @@ __attribute__((softstorebuffer)) static void do_reader(bool do_sleep,
 {
 	int a;
 	struct shared_t *ptr;
-	printk(KERN_INFO "%s: do_sleep: %d disable_irq: %d\n", __func__, do_sleep, disable_irq);
+	printk(KERN_INFO "%s: do_sleep: %d disable_irq: %d\n", __func__,
+	       do_sleep, disable_irq);
 	if (do_sleep)
 		mdelay(1000);
 	ptr = (struct shared_t *)&shared;
