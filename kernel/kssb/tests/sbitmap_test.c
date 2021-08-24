@@ -7,7 +7,7 @@
 struct sbitmap_queue sbq;
 
 unsigned int val;
-unsigned int *ptr;
+unsigned int * arr[1];
 
 // function 1 -> get sbitmap, change value of ptr, release sbitmap
 __attribute__((softstorebuffer)) static void func1()
@@ -15,13 +15,19 @@ __attribute__((softstorebuffer)) static void func1()
 	int idx;
 	unsigned int cpu;
 
-	idx = sbitmap_queue_get(&sbq, &cpu);
-	ptr = NULL;
+	//disable irq
+	local_irq_disable();
+	
+	while((idx = sbitmap_queue_get(&sbq, &cpu)) < 0);
+	arr[idx] = NULL;
 	// below memory store can't be reorderded
 	// store &val into ptr variable
-	ptr = &val;
+	arr[idx] = &val;
 	// release bit in sbitmap_deferred_clear_bit
 	sbitmap_queue_clear(&sbq, idx, cpu);
+
+	//reenable irq
+	local_irq_enable();
 
 	return;
 }
@@ -32,9 +38,15 @@ __attribute__((softstorebuffer)) static void func2()
 	int idx;
 	unsigned int cpu;
 
-	idx = sbitmap_queue_get(&sbq, &cpu);
-	*ptr = 0xdeadbeef;
+	//disable irq
+	local_irq_disable();
+
+	while((idx = sbitmap_queue_get(&sbq, &cpu)) < 0);
+	*arr[idx] = 0xdeadbeef;
 	sbitmap_queue_clear(&sbq, idx, cpu);
+
+	//reenable irq
+	local_irq_enable();
 }
 
 SYSCALL_DEFINE0(ssb_sbitmap_func1)
@@ -67,8 +79,8 @@ SYSCALL_DEFINE0(ssb_sbitmap_init)
 		return ret;
 	}
 
-	// init ptr
-	ptr = &val;
+	// init array
+	arr[0] = &val;
 
 	printk("ssb sbitmap init complete!\n");
 	return ret;
