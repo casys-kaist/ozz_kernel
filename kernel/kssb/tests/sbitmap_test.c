@@ -3,28 +3,40 @@
 #include <linux/kernel.h>
 #include <linux/kthread.h>
 #include <linux/sbitmap.h>
+#include <linux/delay.h>
 
 struct sbitmap_queue sbq;
 
 unsigned int val;
-unsigned int * arr[1];
+volatile unsigned int *ptr;
 
 // function 1 -> get sbitmap, change value of ptr, release sbitmap
-__attribute__((softstorebuffer)) static void func1()
+__attribute__((softstorebuffer)) static void func1(bool delay)
 {
 	int idx;
 	unsigned int cpu;
 
 	//disable irq
 	local_irq_disable();
-	
-	while((idx = sbitmap_queue_get(&sbq, &cpu)) < 0);
-	arr[idx] = NULL;
+
+	idx = sbitmap_queue_get(&sbq, &cpu);
+	printk(KERN_INFO "%s idx: %d\n", __func__, idx);
+	if (idx < 0) {
+		local_irq_enable();
+		return;
+	}
+
+	ptr = NULL;
+
+	barrier();
+
 	// below memory store can't be reorderded
 	// store &val into ptr variable
-	arr[idx] = &val;
+	ptr = &val;
 	// release bit in sbitmap_deferred_clear_bit
 	sbitmap_queue_clear(&sbq, idx, cpu);
+	if (delay)
+		mdelay(2000);
 
 	//reenable irq
 	local_irq_enable();
@@ -33,7 +45,7 @@ __attribute__((softstorebuffer)) static void func1()
 }
 
 // function 2-> get sbitmap, write memory through ptr, release sbitmap
-__attribute__((softstorebuffer)) static void func2()
+__attribute__((softstorebuffer)) static void func2(bool delay)
 {
 	int idx;
 	unsigned int cpu;
@@ -41,23 +53,32 @@ __attribute__((softstorebuffer)) static void func2()
 	//disable irq
 	local_irq_disable();
 
-	while((idx = sbitmap_queue_get(&sbq, &cpu)) < 0);
-	*arr[idx] = 0xdeadbeef;
+	if (delay)
+		mdelay(1000);
+
+	idx = sbitmap_queue_get(&sbq, &cpu);
+	printk(KERN_INFO "%s idx: %d\n", __func__, idx);
+	if (idx < 0) {
+		local_irq_enable();
+		return;
+	}
+
+	*ptr = 0xdeadbeef;
 	sbitmap_queue_clear(&sbq, idx, cpu);
 
 	//reenable irq
 	local_irq_enable();
 }
 
-SYSCALL_DEFINE0(ssb_sbitmap_func1)
+SYSCALL_DEFINE1(ssb_sbitmap_func1, bool, delay)
 {
-	func1();
+	func1(delay);
 	return 0;
 }
 
-SYSCALL_DEFINE0(ssb_sbitmap_func2)
+SYSCALL_DEFINE1(ssb_sbitmap_func2, bool, delay)
 {
-	func2();
+	func2(delay);
 	return 0;
 }
 
@@ -80,7 +101,7 @@ SYSCALL_DEFINE0(ssb_sbitmap_init)
 	}
 
 	// init array
-	arr[0] = &val;
+	ptr = &val;
 
 	printk("ssb sbitmap init complete!\n");
 	return ret;

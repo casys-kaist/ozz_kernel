@@ -668,10 +668,14 @@ void sbitmap_queue_clear_batch(struct sbitmap_queue *sbq, int offset,
 					tags[nr_tags - 1] - offset);
 }
 
+void pso_test_breakpoint(void);
+
 void sbitmap_queue_clear(struct sbitmap_queue *sbq, unsigned int nr,
 			 unsigned int cpu)
 {
 	sbitmap_deferred_clear_bit(&sbq->sb, nr);
+
+	pso_test_breakpoint();
 
 	/*
 	 * Pairs with the memory barrier in set_current_state() to ensure the

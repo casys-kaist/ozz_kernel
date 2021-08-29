@@ -11,7 +11,7 @@ struct shared_t shared;
 
 int nothing;
 
-static noinline void pso_test_breakpoint(void)
+noinline void pso_test_breakpoint(void)
 {
 	nothing = 0;
 }
