@@ -207,7 +207,11 @@ static void kssb_cleanup(void)
 // emulation. This is different with KSSB_SWITCH that allows the
 // per-task emulation. NOTE: Should be volatile since there is no
 // statement that changes the value in source codes.
+#ifdef __TEST_KSSB
+volatile char __ssb_do_emulate = true;
+#else
 volatile char __ssb_do_emulate = false;
+#endif
 
 module_init(kssb_init);
 module_exit(kssb_cleanup);
