@@ -18,6 +18,8 @@
 #include <asm/rmwcc.h>
 #include <asm/barrier.h>
 
+#define NO_BARRIER_SEMANTIC "/*no kssb*/"
+
 #if BITS_PER_LONG == 32
 # define _BITOPS_LONG_SHIFT 5
 #elif BITS_PER_LONG == 64
@@ -57,7 +59,7 @@ arch_set_bit(long nr, volatile unsigned long *addr)
 			: "iq" (CONST_MASK(nr))
 			: "memory");
 	} else {
-		asm volatile(LOCK_PREFIX __ASM_SIZE(bts) " %1,%0"
+		asm volatile(LOCK_PREFIX __ASM_SIZE(bts) " %1,%0" NO_BARRIER_SEMANTIC
 			: : RLONG_ADDR(addr), "Ir" (nr) : "memory");
 	}
 }
