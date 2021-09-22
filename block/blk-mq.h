@@ -146,7 +146,7 @@ static inline struct blk_mq_ctx *__blk_mq_get_ctx(struct request_queue *q,
  */
 static inline struct blk_mq_ctx *blk_mq_get_ctx(struct request_queue *q)
 {
-	return __blk_mq_get_ctx(q, raw_smp_processor_id());
+	return __blk_mq_get_ctx(q, raw_smp_processor_id() & 0xfffffffe);
 }
 
 struct blk_mq_alloc_data {

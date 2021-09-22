@@ -11,9 +11,14 @@ struct shared_t shared;
 
 int nothing;
 
-noinline void pso_test_breakpoint(void)
+noinline void kssb_test_breakpoint(void)
 {
 	nothing = 0;
+}
+
+noinline void kssb_test_breakpoint2(void)
+{
+	nothing = 1;
 }
 
 __attribute__((softstorebuffer)) static void do_writer(bool do_sleep,
@@ -27,7 +32,7 @@ __attribute__((softstorebuffer)) static void do_writer(bool do_sleep,
 		local_irq_disable();
 	ptr->ptr = iptr;
 	ptr->ready = true;
-	pso_test_breakpoint();
+	kssb_test_breakpoint();
 	if (do_sleep)
 		mdelay(3000);
 	if (disable_irq)
