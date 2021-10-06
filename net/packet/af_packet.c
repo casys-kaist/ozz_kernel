@@ -3806,25 +3806,19 @@ packet_setsockopt(struct socket *sock, int level, int optname, sockptr_t optval,
 
 		if (optlen != sizeof(val))
 			return -EINVAL;
+		if (po->rx_ring.pg_vec || po->tx_ring.pg_vec)
+			return -EBUSY;
 		if (copy_from_sockptr(&val, optval, sizeof(val)))
 			return -EFAULT;
 		switch (val) {
 		case TPACKET_V1:
 		case TPACKET_V2:
 		case TPACKET_V3:
-			break;
+			po->tp_version = val;
+			return 0;
 		default:
 			return -EINVAL;
 		}
-		lock_sock(sk);
-		if (po->rx_ring.pg_vec || po->tx_ring.pg_vec) {
-			ret = -EBUSY;
-		} else {
-			po->tp_version = val;
-			ret = 0;
-		}
-		release_sock(sk);
-		return ret;
 	}
 	case PACKET_RESERVE:
 	{
@@ -4440,6 +4434,7 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 			goto out;
 	}
 
+	lock_sock(sk);
 
 	/* Detach socket from network */
 	spin_lock(&po->bind_lock);
@@ -4490,6 +4485,7 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 		if (!tx_ring)
 			prb_shutdown_retire_blk_timer(po, rb_queue);
 	}
+	release_sock(sk);
 
 out_free_pg_vec:
 	bitmap_free(rx_owner_map);
