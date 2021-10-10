@@ -212,6 +212,7 @@ volatile char __ssb_do_emulate = true;
 #else
 volatile char __ssb_do_emulate = false;
 #endif
+EXPORT_SYMBOL(__ssb_do_emulate);
 
 module_init(kssb_init);
 module_exit(kssb_cleanup);
