@@ -3,9 +3,6 @@
 # Makefile for the linux ext4-filesystem routines.
 #
 
-KSSB_INSTRUMENT := y
-export KSSB_INSTRUMENT
-
 obj-$(CONFIG_EXT4_FS) += ext4.o
 
 ext4-y	:= balloc.o bitmap.o block_validity.o dir.o ext4_jbd2.o extents.o \
