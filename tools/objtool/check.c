@@ -942,6 +942,17 @@ static const char *uaccess_safe_builtin[] = {
 	"__ubsan_handle_type_mismatch",
 	"__ubsan_handle_type_mismatch_v1",
 	"__ubsan_handle_shift_out_of_bounds",
+	/* KSSB */
+	"__ssb_pso_flush",
+	"__ssb_pso_retchk",
+	"__ssb_pso_load1",
+	"__ssb_pso_load2",
+	"__ssb_pso_load4",
+	"__ssb_pso_load8",
+	"__ssb_pso_store1",
+	"__ssb_pso_store2",
+	"__ssb_pso_store4",
+	"__ssb_pso_store8",
 	/* misc */
 	"csum_partial_copy_generic",
 	"copy_mc_fragile",
