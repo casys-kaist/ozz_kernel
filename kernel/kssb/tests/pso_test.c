@@ -32,7 +32,15 @@ __attribute__((softstorebuffer)) static void do_writer(bool do_sleep,
 		local_irq_disable();
 	ptr->ptr = iptr;
 	ptr->ready = true;
-	kssb_test_breakpoint();
+	if (!do_sleep)
+		// NOTE: As of milestone-0.4, the return check
+		// mechanism of our kssb pass always flushes the store
+		// buffer, which is incomplete yet. This is safe
+		// regarding the kernel booting process, it prevents
+		// pso_test from triggering if we execute the
+		// breakpoint function. So execute the function if
+		// do_sleep is false for all tests work properly.
+		kssb_test_breakpoint();
 	if (do_sleep)
 		mdelay(3000);
 	if (disable_irq)
