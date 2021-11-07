@@ -370,12 +370,12 @@ static __always_inline uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	struct kssb_access acc = INIT_KSSB_LOAD(addr, size);
 
 	__sanitize_memcov_trace_load(acc.inst, addr, size);
-	local_irq_save(flags);
+	raw_local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		ret = do_buffer_load(&acc);
 	else
 		ret = __load_single(&acc);
-	local_irq_restore(flags);
+	raw_local_irq_restore(flags);
 	return ret;
 }
 
@@ -386,22 +386,22 @@ static __always_inline void __store_callback_pso(uint64_t *addr, uint64_t val,
 	struct kssb_access acc = INIT_KSSB_STORE(addr, val, size);
 
 	__sanitize_memcov_trace_store(acc.inst, addr, size);
-	local_irq_save(flags);
+	raw_local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		do_buffer_store(&acc);
 	else
 		__flush_single_entry_po_preserve(&acc);
-	local_irq_restore(flags);
+	raw_local_irq_restore(flags);
 }
 
 static void __flush_callback_pso(void)
 {
 	unsigned long flags;
-	local_irq_save(flags);
+	raw_local_irq_save(flags);
 	// The flush callback should be called regardless of the
 	// context.
 	do_buffer_flush(0);
-	local_irq_restore(flags);
+	raw_local_irq_restore(flags);
 }
 
 static bool is_instrumented_address(void *ret)
