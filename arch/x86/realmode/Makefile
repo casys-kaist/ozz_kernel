@@ -11,7 +11,7 @@
 KASAN_SANITIZE			:= n
 KCSAN_SANITIZE			:= n
 
-KSSB_INSTRUMENT := N
+KSSB_INSTRUMENT := N # KSSB force
 
 subdir- := rm
 

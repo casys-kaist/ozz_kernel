@@ -1,5 +1,5 @@
 KBUILD_CFLAGS += "-Wno-unused-label"
-KSSB_INSTRUMENT := y
+KSSB_INSTRUMENT := y # KSSB force
 
 CFLAGS_pso_test.o := -mllvm -instrument-out-of-scope=false
 

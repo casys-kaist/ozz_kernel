@@ -5,10 +5,10 @@
 KSSB_INSTRUMENT := y
 export KSSB_INSTRUMENT
 
-KSSB_INSTRUMENT_slab_common.o := N
-KSSB_INSTRUMENT_slab.o := N
-KSSB_INSTRUMENT_slub.o := N
-KSSB_INSTRUMENT_kmemleak.o := N
+KSSB_INSTRUMENT_slab_common.o := N # KSSB force
+KSSB_INSTRUMENT_slab.o := N # KSSB force
+KSSB_INSTRUMENT_slub.o := N # KSSB force
+KSSB_INSTRUMENT_kmemleak.o := N # KSSB force
 
 KASAN_SANITIZE_slab_common.o := n
 KASAN_SANITIZE_slab.o := n
