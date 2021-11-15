@@ -4434,8 +4434,6 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 			goto out;
 	}
 
-	lock_sock(sk);
-
 	/* Detach socket from network */
 	spin_lock(&po->bind_lock);
 	was_running = po->running;
@@ -4485,7 +4483,6 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 		if (!tx_ring)
 			prb_shutdown_retire_blk_timer(po, rb_queue);
 	}
-	release_sock(sk);
 
 out_free_pg_vec:
 	bitmap_free(rx_owner_map);
