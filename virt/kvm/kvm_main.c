@@ -67,6 +67,8 @@
 
 #include <linux/kvm_dirty_ring.h>
 
+#include <linux/delay.h>
+
 /* Worst case buffer size needed for holding an integer. */
 #define ITOA_MAX_LEN 12
 
@@ -4073,6 +4075,8 @@ static int kvm_ioctl_create_device(struct kvm *kvm,
 		ops->destroy(dev);
 		return ret;
 	}
+
+	mdelay(100);
 
 	kvm_get_kvm(kvm);
 	cd->fd = ret;
