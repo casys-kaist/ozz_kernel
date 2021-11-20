@@ -15,7 +15,8 @@ UBSAN_SANITIZE			:= n
 KCSAN_SANITIZE			:= n
 OBJECT_FILES_NON_STANDARD	:= y
 
-KSSB_INSTRUMENT := N # KSSB force
+# KSSB force
+KSSB_INSTRUMENT := N
 
 # Prevents link failures: __sanitizer_cov_trace_pc() is not linked in.
 KCOV_INSTRUMENT		:= n
