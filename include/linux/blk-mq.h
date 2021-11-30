@@ -198,6 +198,10 @@ struct request {
 	 */
 	rq_end_io_fn *end_io;
 	void *end_io_data;
+#ifdef CONFIG_KSSB
+	bool kssb_test;
+	int *kssb_test_ptr;
+#endif
 };
 
 #define req_op(req) \
@@ -741,7 +745,7 @@ static inline int blk_mq_request_completed(struct request *rq)
 }
 
 /*
- * 
+ *
  * Set the state to complete when completing a request from inside ->queue_rq.
  * This is used by drivers that want to ensure special complete actions that
  * need access to the request are called on failure, e.g. by nvme for
