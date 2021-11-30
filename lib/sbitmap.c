@@ -202,11 +202,6 @@ static int __sbitmap_get(struct sbitmap *sb, unsigned int alloc_hint)
 	unsigned int i, index;
 	int nr = -1;
 
-#ifdef CONFIG_KSSB
-	round_robin = false;
-	alloc_hint = 0;
-#endif
-
 	index = SB_NR_TO_INDEX(sb, alloc_hint);
 
 	/*
@@ -218,6 +213,10 @@ static int __sbitmap_get(struct sbitmap *sb, unsigned int alloc_hint)
 		alloc_hint = SB_NR_TO_BIT(sb, alloc_hint);
 	else
 		alloc_hint = 0;
+
+#ifdef CONFIG_KSSB
+	alloc_hint = 0;
+#endif
 
 	for (i = 0; i < sb->map_nr; i++) {
 		nr = sbitmap_find_bit_in_index(sb, index, alloc_hint);
@@ -675,7 +674,7 @@ void sbitmap_queue_clear_batch(struct sbitmap_queue *sbq, int offset,
 					tags[nr_tags - 1] - offset);
 }
 
-void pso_test_breakpoint(void);
+void kssb_test_breakpoint(void);
 
 void sbitmap_queue_clear(struct sbitmap_queue *sbq, unsigned int nr,
 			 unsigned int cpu)
