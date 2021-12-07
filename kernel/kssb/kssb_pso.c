@@ -8,6 +8,7 @@
 #include <linux/sched/task_stack.h>
 #include <linux/kssb.h>
 #include <linux/kmemcov.h>
+#include <linux/kasan.h>
 
 /* #define __DEBUG */
 
@@ -333,6 +334,14 @@ static void do_buffer_store(struct kssb_access *acc)
 	do_buffer_store_aligned(acc);
 }
 
+static bool __kssb_check_access(struct kssb_access *acc)
+{
+	if (acc->type == kssb_load)
+		return kasan_check_read((void *)acc->inst, acc->size);
+	else
+		return kasan_check_write((void *)acc->inst, acc->size);
+}
+
 // NOTE: Load/store callback should not be preempted until they are
 // finished (they use a percpu store buffer). Whenever an interrupt is
 // delivered, the percpu store buffer should be flushed to make sure
@@ -370,6 +379,8 @@ static __always_inline uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	struct kssb_access acc = INIT_KSSB_LOAD(addr, size);
 
 	__sanitize_memcov_trace_load(acc.inst, addr, size);
+	__kssb_check_access(&acc);
+
 	raw_local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		ret = do_buffer_load(&acc);
@@ -386,6 +397,8 @@ static __always_inline void __store_callback_pso(uint64_t *addr, uint64_t val,
 	struct kssb_access acc = INIT_KSSB_STORE(addr, val, size);
 
 	__sanitize_memcov_trace_store(acc.inst, addr, size);
+	__kssb_check_access(&acc);
+
 	raw_local_irq_save(flags);
 	if (CAN_EMULATE_KSSB(&acc))
 		do_buffer_store(&acc);
