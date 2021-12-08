@@ -187,8 +187,6 @@ static int __init kssb_init(void)
 		}
 	}
 
-	WRITE_ONCE(kssb_initialized, true);
-
 	return 0;
 }
 
