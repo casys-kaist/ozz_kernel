@@ -56,7 +56,7 @@ void reclaim_entry(struct kssb_buffer_entry *entry)
 int flush_vector_next(unsigned long inst)
 {
 	struct kssb_flush_vector *vector;
-	int index, ret = 0;
+	int index, ret = FLUSH_VECTOR_ALL;
 
 	rcu_read_lock();
 	// Paired with smp_store_release() in ssb_feedinput()

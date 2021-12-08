@@ -55,6 +55,8 @@ struct kssb_flush_vector {
 
 int flush_vector_next(unsigned long);
 
+#define FLUSH_VECTOR_ALL 100
+
 void assert_context(struct task_struct *);
 void reset_context(void);
 
