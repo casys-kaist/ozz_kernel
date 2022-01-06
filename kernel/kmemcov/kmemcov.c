@@ -93,6 +93,18 @@ void __sanitize_memcov_trace_load(unsigned long inst, void *addr, size_t size)
 }
 EXPORT_SYMBOL(__sanitize_memcov_trace_load);
 
+void sanitize_memcov_trace_store(const volatile void *addr, size_t size)
+{
+	__sanitize_memcov_trace_store(_RET_IP_, (void *) addr, size);
+}
+EXPORT_SYMBOL(sanitize_memcov_trace_store);
+
+void sanitize_memcov_trace_load(const volatile void *addr, size_t size)
+{
+	__sanitize_memcov_trace_load(_RET_IP_, (void *)addr, size);
+}
+EXPORT_SYMBOL(sanitize_memcov_trace_load);
+
 static void kmemcov_get(struct kmemcov *kmemcov)
 {
 	refcount_inc(&kmemcov->refcount);

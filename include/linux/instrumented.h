@@ -11,6 +11,15 @@
 #include <linux/kasan-checks.h>
 #include <linux/kcsan-checks.h>
 #include <linux/types.h>
+#include <linux/kmemcov.h>
+
+#ifndef NO_INSTRUMENT_ATOMIC
+#define kmemcov_trace_load(v, size) sanitize_memcov_trace_load(v, size)
+#define kmemcov_trace_store(v, size) sanitize_memcov_trace_store(v, size)
+#else
+#define kmemcov_trace_load(v, size) do { } while(0)
+#define kmemcov_trace_store(v, size) do { } while(0)
+#endif
 
 /**
  * instrument_read - instrument regular read access
@@ -23,6 +32,7 @@
  */
 static __always_inline void instrument_read(const volatile void *v, size_t size)
 {
+	kmemcov_trace_load(v, size);
 	kasan_check_read(v, size);
 	kcsan_check_read(v, size);
 }
@@ -38,6 +48,7 @@ static __always_inline void instrument_read(const volatile void *v, size_t size)
  */
 static __always_inline void instrument_write(const volatile void *v, size_t size)
 {
+	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_write(v, size);
 }
@@ -53,6 +64,7 @@ static __always_inline void instrument_write(const volatile void *v, size_t size
  */
 static __always_inline void instrument_read_write(const volatile void *v, size_t size)
 {
+	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_read_write(v, size);
 }
@@ -68,6 +80,7 @@ static __always_inline void instrument_read_write(const volatile void *v, size_t
  */
 static __always_inline void instrument_atomic_read(const volatile void *v, size_t size)
 {
+	kmemcov_trace_load(v, size);
 	kasan_check_read(v, size);
 	kcsan_check_atomic_read(v, size);
 }
@@ -83,6 +96,7 @@ static __always_inline void instrument_atomic_read(const volatile void *v, size_
  */
 static __always_inline void instrument_atomic_write(const volatile void *v, size_t size)
 {
+	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_atomic_write(v, size);
 }
@@ -98,6 +112,7 @@ static __always_inline void instrument_atomic_write(const volatile void *v, size
  */
 static __always_inline void instrument_atomic_read_write(const volatile void *v, size_t size)
 {
+	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_atomic_read_write(v, size);
 }
