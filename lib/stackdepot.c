@@ -18,6 +18,7 @@
  *
  * Based on code by Dmitry Chernenkov.
  */
+#define NO_TRACE_ATOMIC
 
 #include <linux/gfp.h>
 #include <linux/jhash.h>

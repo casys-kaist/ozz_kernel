@@ -16,6 +16,7 @@ KCOV_INSTRUMENT_dynamic_debug.o := n
 KCOV_INSTRUMENT_fault-inject.o := n
 
 KSSB_INSTRUMENT := y
+KSSB_INSTRUMENT_stackdepot.o := n
 
 # string.o implements standard library functions like memset/memcpy etc.
 # Use -ffreestanding to ensure that the compiler does not try to "optimize"

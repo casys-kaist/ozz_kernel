@@ -13,7 +13,11 @@
 #include <linux/types.h>
 #include <linux/kmemcov.h>
 
-#ifndef NO_INSTRUMENT_ATOMIC
+#ifdef NO_INSTRUMENT_ATOMIC
+#define NO_TRACE_ATOMIC
+#endif
+
+#ifndef NO_TRACE_ATOMIC
 #define kmemcov_trace_load(v, size) sanitize_memcov_trace_load(v, size)
 #define kmemcov_trace_store(v, size) sanitize_memcov_trace_store(v, size)
 #else
