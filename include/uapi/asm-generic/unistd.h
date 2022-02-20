@@ -883,6 +883,8 @@ __SYSCALL(__NR_process_mrelease, sys_process_mrelease)
 #define __NR_futex_waitv 449
 __SYSCALL(__NR_futex_waitv, sys_futex_waitv)
 
+#define __NR_set_mempolicy_home_node 450
+__SYSCALL(__NR_set_mempolicy_home_node, sys_set_mempolicy_home_node)
 #define __NR_ssb_feedinput 500
 __SYSCALL(__NR_ssb_feedinput, sys_ssb_feedinput)
 #define __NR_ssb_pso_writer 501

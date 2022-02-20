@@ -463,6 +463,7 @@
 # 447 reserved for memfd_secret
 448	common	process_mrelease		sys_process_mrelease
 449	common	futex_waitv			sys_futex_waitv
+450	common	set_mempolicy_home_node		sys_set_mempolicy_home_node
 500 common ssb_feedinput sys_ssb_feedinput
 501 common ssb_pso_writer sys_ssb_pso_writer
 502 common ssb_pso_reader sys_ssb_pso_reader

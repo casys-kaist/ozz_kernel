@@ -8,6 +8,7 @@
 
 KSSB_INSTRUMENT := y
 export KSSB_INSTRUMENT
+obj-$(CONFIG_SYSCTL)		+= sysctls.o
 
 obj-y :=	open.o read_write.o file_table.o super.o \
 		char_dev.o stat.o exec.o pipe.o namei.o fcntl.o \
@@ -97,7 +98,7 @@ obj-$(CONFIG_EXPORTFS)		+= exportfs/
 obj-$(CONFIG_NFSD)		+= nfsd/
 obj-$(CONFIG_LOCKD)		+= lockd/
 obj-$(CONFIG_NLS)		+= nls/
-obj-$(CONFIG_UNICODE)		+= unicode/
+obj-y				+= unicode/
 obj-$(CONFIG_SYSV_FS)		+= sysv/
 obj-$(CONFIG_SMBFS_COMMON)	+= smbfs_common/
 obj-$(CONFIG_CIFS)		+= cifs/
