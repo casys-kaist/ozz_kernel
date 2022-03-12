@@ -384,6 +384,9 @@
 507 common ssb_sbitmap_func2 sys_ssb_sbitmap_func2
 508 common ssb_sbitmap_clear sys_ssb_sbitmap_clear
 
+509 common qcsched_simple_write sys_qcsched_simple_write
+510 common qcsched_simple_read sys_qcsched_simple_read
+
 #
 # Due to a historical design error, certain syscalls are numbered differently
 # in x32 as compared to native x86_64.  These syscalls have numbers 512-547.
