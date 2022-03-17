@@ -4,8 +4,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
-
-#include "../include/hcall.h"
+#include <linux/qcsched/hcall.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Dae R. Jeong");

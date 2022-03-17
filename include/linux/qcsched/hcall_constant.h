@@ -13,6 +13,7 @@
 #define KVM_EXIT_HCALL HCALL_EXIT_REASON
 
 // Commands saved in kvm_run->hypercall.args[0]
+#define HCALL_PREPARE 0x23564d5a
 #define HCALL_INSTALL_BP 0xf477909a
 #define HCALL_ACTIVATE_BP 0x40ab903
 #define HCALL_DEACTIVATE_BP 0xf327524f
@@ -20,6 +21,7 @@
 #define HCALL_VMI_HINT 0x7ca889f0
 #define HCALL_ENABLE_KSSB 0x3dcb4536
 #define HCALL_DISABLE_KSSB 0xbed348f5
+#define HCALL_RESET 0x3e444ddf
 
 // Subcommands for HCALL_VMI_HINT (saved in kvm_run->hypercall.args[1])
 #define VMI_TRAMPOLINE 0x939aef52
@@ -27,5 +29,7 @@
 #define VMI_CURRENT_TASK 0xfb40de5
 #define VMI__PER_CPU_OFFSET0 0x4a157131
 #define VMI__SSB_DO_EMULATE 0xdb17901
+#define VMI_LOCK_ACQUIRE 0x7867ffae
+#define VMI_LOCK_RELEASE 0x8287b1f7
 
 #endif /* __HCALL_CONSTANT_H */

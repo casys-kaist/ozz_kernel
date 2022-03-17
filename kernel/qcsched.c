@@ -1,5 +1,5 @@
 #include <linux/kernel.h>
-#include <linux/qcsched.h>
+#include <linux/qcsched/qcsched.h>
 
 noinline void __qcsched_hook(void)
 {

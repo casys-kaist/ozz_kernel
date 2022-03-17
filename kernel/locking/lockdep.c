@@ -56,6 +56,8 @@
 #include <linux/rcupdate.h>
 #include <linux/kprobes.h>
 #include <linux/lockdep.h>
+#include <linux/kmemcov.h>
+#include <linux/qcsched/qcsched.h>
 
 #include <asm/sections.h>
 
@@ -5633,6 +5635,10 @@ void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 		return;
 	}
 
+	if (unlikely(current->kmemcov_mode == KMEMCOV_MODE_TRACE_STLD) &&
+		in_task())
+			qcsched_vmi_hint_lock_acquire(lock, trylock, read);
+
 	raw_local_irq_save(flags);
 	check_flags(flags);
 
@@ -5661,6 +5667,10 @@ void lock_release(struct lockdep_map *lock, unsigned long ip)
 		check_chain_key(current);
 	lockdep_recursion_finish();
 	raw_local_irq_restore(flags);
+
+	if (unlikely(current->kmemcov_mode == KMEMCOV_MODE_TRACE_STLD) &&
+		in_task())
+			qcsched_vmi_hint_lock_release(lock);
 }
 EXPORT_SYMBOL_GPL(lock_release);
 

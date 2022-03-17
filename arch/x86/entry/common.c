@@ -19,7 +19,7 @@
 #include <linux/nospec.h>
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
-#include <linux/qcsched.h>
+#include <linux/qcsched/qcsched.h>
 
 #ifdef CONFIG_XEN_PV
 #include <xen/xen-ops.h>
