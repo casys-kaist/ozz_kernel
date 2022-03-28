@@ -36,9 +36,9 @@
  */
 static __always_inline void instrument_read(const volatile void *v, size_t size)
 {
-	kmemcov_trace_load(v, size);
 	kasan_check_read(v, size);
 	kcsan_check_read(v, size);
+	kmemcov_trace_load(v, size);
 }
 
 /**
@@ -52,9 +52,9 @@ static __always_inline void instrument_read(const volatile void *v, size_t size)
  */
 static __always_inline void instrument_write(const volatile void *v, size_t size)
 {
-	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_write(v, size);
+	kmemcov_trace_store(v, size);
 }
 
 /**
@@ -68,9 +68,9 @@ static __always_inline void instrument_write(const volatile void *v, size_t size
  */
 static __always_inline void instrument_read_write(const volatile void *v, size_t size)
 {
-	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_read_write(v, size);
+	kmemcov_trace_store(v, size);
 }
 
 /**
@@ -84,9 +84,9 @@ static __always_inline void instrument_read_write(const volatile void *v, size_t
  */
 static __always_inline void instrument_atomic_read(const volatile void *v, size_t size)
 {
-	kmemcov_trace_load(v, size);
 	kasan_check_read(v, size);
 	kcsan_check_atomic_read(v, size);
+	kmemcov_trace_load(v, size);
 }
 
 /**
@@ -100,9 +100,9 @@ static __always_inline void instrument_atomic_read(const volatile void *v, size_
  */
 static __always_inline void instrument_atomic_write(const volatile void *v, size_t size)
 {
-	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_atomic_write(v, size);
+	kmemcov_trace_store(v, size);
 }
 
 /**
@@ -116,9 +116,9 @@ static __always_inline void instrument_atomic_write(const volatile void *v, size
  */
 static __always_inline void instrument_atomic_read_write(const volatile void *v, size_t size)
 {
-	kmemcov_trace_store(v, size);
 	kasan_check_write(v, size);
 	kcsan_check_atomic_read_write(v, size);
+	kmemcov_trace_store(v, size);
 }
 
 /**
