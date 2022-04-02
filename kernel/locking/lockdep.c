@@ -5637,7 +5637,7 @@ void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 
 	if (unlikely(current->kmemcov_mode == KMEMCOV_MODE_TRACE_STLD) &&
 		in_task())
-			qcsched_vmi_hint_lock_acquire(lock, trylock, read);
+			qcsched_vmi_hint_lock_acquire(lock, trylock, read, ip);
 
 	raw_local_irq_save(flags);
 	check_flags(flags);

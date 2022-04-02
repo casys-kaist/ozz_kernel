@@ -9,14 +9,15 @@
 void qcsched_hook_entry(void);
 void qcsched_hook_exit(void);
 
-static inline void qcsched_vmi_hint_lock_acquire(struct lockdep_map *lock,
-						 int trylock, int read)
+static noinline void qcsched_vmi_hint_lock_acquire(struct lockdep_map *lock,
+						   int trylock, int read,
+						   unsigned long ip)
 {
-	hypercall(HCALL_VMI_HINT, VMI_LOCK_ACQUIRE, (unsigned long)lock,
-		  (trylock << 2) | read);
+	hypercall(HCALL_VMI_HINT, VMI_LOCK_ACQUIRE,
+		  (unsigned long)lock | (trylock << 2) | read, ip);
 }
 
-static inline void qcsched_vmi_hint_lock_release(struct lockdep_map *lock)
+static noinline void qcsched_vmi_hint_lock_release(struct lockdep_map *lock)
 {
 	hypercall(HCALL_VMI_HINT, VMI_LOCK_RELEASE, (unsigned long)lock, 0);
 }
