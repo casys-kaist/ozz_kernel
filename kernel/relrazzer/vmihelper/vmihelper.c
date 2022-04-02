@@ -44,6 +44,10 @@ static int __init vmihelper_init(void)
 	hypercall(HCALL_VMI_HINT, VMI__SSB_DO_EMULATE,
 		  (unsigned long)&__ssb_do_emulate, 0);
 
+	pr_info("__preempt_count: %lx\n", &__preempt_count);
+	hypercall(HCALL_VMI_HINT, VMI__PREEMPT_COUNT,
+		  (unsigned long)&__preempt_count, 0);
+
 	return 0;
 }
 
