@@ -5,6 +5,7 @@
 #include <linux/kernel.h>
 #include <linux/kallsyms.h>
 #include <linux/qcsched/hcall.h>
+#include <linux/lockdep.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Dae R. Jeong");
@@ -12,6 +13,24 @@ MODULE_DESCRIPTION("VMI helper module");
 MODULE_VERSION("0.01");
 
 extern volatile char __ssb_do_emulate;
+
+#ifdef CONFIG_LOCKDEP
+extern struct lockdep_map __fs_reclaim_map;
+#endif
+
+static struct lockdep_map *whitelist[] = {
+#ifdef CONFIG_LOCKDEP
+	&__fs_reclaim_map,
+#endif
+};
+
+static void vmihelper_notify_lockdep_whitelist(void)
+{
+	int i;
+	for (i = 0; i < sizeof(whitelist) / sizeof(whitelist[0]); i++)
+		hypercall(HCALL_VMI_HINT, VMI_LOCKDEP_WHITELIST,
+			  (unsigned long)whitelist[i], 0);
+}
 
 static int __init vmihelper_init(void)
 {
@@ -47,6 +66,8 @@ static int __init vmihelper_init(void)
 	pr_info("__preempt_count: %lx\n", &__preempt_count);
 	hypercall(HCALL_VMI_HINT, VMI__PREEMPT_COUNT,
 		  (unsigned long)&__preempt_count, 0);
+
+	vmihelper_notify_lockdep_whitelist();
 
 	return 0;
 }
