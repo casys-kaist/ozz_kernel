@@ -1,4 +1,5 @@
 #define NO_INSTRUMENT_ATOMIC
+
 #include <linux/atomic.h>
 #include <linux/compiler.h>
 #include <linux/errno.h>
@@ -13,6 +14,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/sched/task_stack.h>
 #include <linux/vmalloc.h>
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
@@ -61,6 +63,9 @@ static void __always_inline notrace __sanitize_memcov_trace_access_safe(
 	struct task_struct *t = current;
 	struct kmemcov_access *area;
 	unsigned long pos, *posp;
+
+	if (object_is_on_stack(addr))
+		return;
 
 	area = t->kmemcov_area;
 	/* The first 64-bit word is the number of subsequent PCs. */
