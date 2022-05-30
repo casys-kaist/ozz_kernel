@@ -1839,9 +1839,6 @@ static int rt5640_set_dai_sysclk(struct snd_soc_dai *dai,
 	unsigned int reg_val = 0;
 	unsigned int pll_bit = 0;
 
-	if (freq == rt5640->sysclk && clk_id == rt5640->sysclk_src)
-		return 0;
-
 	switch (clk_id) {
 	case RT5640_SCLK_S_MCLK:
 		reg_val |= RT5640_SCLK_SRC_MCLK;
@@ -2930,8 +2927,7 @@ static int rt5640_parse_dt(struct rt5640_priv *rt5640, struct device_node *np)
 	return 0;
 }
 
-static int rt5640_i2c_probe(struct i2c_client *i2c,
-		    const struct i2c_device_id *id)
+static int rt5640_i2c_probe(struct i2c_client *i2c)
 {
 	struct rt5640_priv *rt5640;
 	int ret;
@@ -3009,7 +3005,7 @@ static struct i2c_driver rt5640_i2c_driver = {
 		.acpi_match_table = ACPI_PTR(rt5640_acpi_match),
 		.of_match_table = of_match_ptr(rt5640_of_match),
 	},
-	.probe = rt5640_i2c_probe,
+	.probe_new = rt5640_i2c_probe,
 	.id_table = rt5640_i2c_id,
 };
 module_i2c_driver(rt5640_i2c_driver);

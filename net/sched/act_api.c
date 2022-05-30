@@ -195,7 +195,7 @@ static int offload_action_init(struct flow_offload_action *fl_action,
 	if (act->ops->offload_act_setup) {
 		spin_lock_bh(&act->tcfa_lock);
 		err = act->ops->offload_act_setup(act, fl_action, NULL,
-						  false);
+						  false, extack);
 		spin_unlock_bh(&act->tcfa_lock);
 		return err;
 	}
@@ -271,10 +271,10 @@ static int tcf_action_offload_add_ex(struct tc_action *action,
 	if (err)
 		goto fl_err;
 
-	err = tc_setup_action(&fl_action->action, actions);
+	err = tc_setup_action(&fl_action->action, actions, extack);
 	if (err) {
 		NL_SET_ERR_MSG_MOD(extack,
-				   "Failed to setup tc actions for offload\n");
+				   "Failed to setup tc actions for offload");
 		goto fl_err;
 	}
 
@@ -1446,6 +1446,8 @@ int tcf_action_init(struct net *net, struct tcf_proto *tp, struct nlattr *nla,
 				continue;
 			if (skip_sw != tc_act_skip_sw(act->tcfa_flags) ||
 			    skip_hw != tc_act_skip_hw(act->tcfa_flags)) {
+				NL_SET_ERR_MSG(extack,
+					       "Mismatch between action and filter offload flags");
 				err = -EINVAL;
 				goto err;
 			}
