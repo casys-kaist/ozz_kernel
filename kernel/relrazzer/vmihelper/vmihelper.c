@@ -37,6 +37,7 @@ static int __init vmihelper_init(void)
 	char *hook_name = "qcsched_hook_entry";
 	unsigned long addr = kallsyms_lookup_name(hook_name);
 	unsigned long ret;
+	unsigned int num_cpus;
 	int i;
 
 	pr_info("Installing vmihelper\n");
@@ -53,7 +54,8 @@ static int __init vmihelper_init(void)
 	hypercall(HCALL_VMI_HINT, VMI_CURRENT_TASK,
 		  (unsigned long)&current_task, 0);
 
-	for (i = 0; i < 64; i++) {
+	num_cpus = num_online_cpus();
+	for (i = 0; i < (int)num_cpus; i++) {
 		pr_info("__per_cpu_offset[%d]: %lx\n", i, __per_cpu_offset[i]);
 		hypercall(HCALL_VMI_HINT, VMI__PER_CPU_OFFSET0 + i,
 			  __per_cpu_offset[i], 0);
