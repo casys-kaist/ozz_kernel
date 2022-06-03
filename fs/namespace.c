@@ -1767,11 +1767,11 @@ static inline bool may_mount(void)
 
 static void warn_mandlock(void)
 {
-	pr_warn_once("=======================================================\n"
-		     "WARNING: The mand mount option has been deprecated and\n"
-		     "         and is ignored by this kernel. Remove the mand\n"
-		     "         option from the mount to silence this warning.\n"
-		     "=======================================================\n");
+	/* pr_warn_once("=======================================================\n" */
+	/* 	     "WARNING: The mand mount option has been deprecated and\n" */
+	/* 	     "         and is ignored by this kernel. Remove the mand\n" */
+	/* 	     "         option from the mount to silence this warning.\n" */
+	/* 	     "=======================================================\n"); */
 }
 
 static int can_umount(const struct path *path, int flags)
