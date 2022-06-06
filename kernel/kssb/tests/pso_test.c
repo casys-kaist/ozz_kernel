@@ -11,14 +11,9 @@ struct shared_t shared;
 
 int nothing;
 
-noinline void kssb_test_breakpoint(void)
+noinline void pso_test_breakpoint(void)
 {
 	nothing = 0;
-}
-
-noinline void kssb_test_breakpoint2(void)
-{
-	nothing = 1;
 }
 
 __attribute__((softstorebuffer)) static void do_writer(bool do_sleep,
@@ -40,7 +35,7 @@ __attribute__((softstorebuffer)) static void do_writer(bool do_sleep,
 		// pso_test from triggering if we execute the
 		// breakpoint function. So execute the function if
 		// do_sleep is false for all tests work properly.
-		kssb_test_breakpoint();
+		pso_test_breakpoint();
 	if (do_sleep)
 		mdelay(3000);
 	if (disable_irq)

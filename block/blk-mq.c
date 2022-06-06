@@ -43,10 +43,6 @@
 #include "blk-mq-sched.h"
 #include "blk-rq-qos.h"
 
-#ifdef CONFIG_KSSB
-int kssb_test_var;
-#endif
-
 static DEFINE_PER_CPU(struct llist_head, blk_cpu_done);
 
 static void blk_mq_poll_stats_start(struct request_queue *q);
@@ -369,10 +365,6 @@ static struct request *blk_mq_rq_ctx_init(struct blk_mq_alloc_data *data,
 	}
 	rq->timeout = 0;
 
-#ifdef CONFIG_KSSB
-	rq->kssb_test_ptr = NULL;
-	rq->kssb_test = false;
-#endif
 	if (blk_mq_need_time_stamp(rq))
 		rq->start_time_ns = ktime_get_ns();
 	else
@@ -615,13 +607,6 @@ static void __blk_mq_free_request(struct request *rq)
 
 	blk_crypto_free_request(rq);
 	blk_pm_mark_last_busy(rq);
-#ifdef CONFIG_KSSB
-	if (rq->kssb_test)
-		kssb_test_var = *rq->kssb_test_ptr;
-	barrier();
-	rq->kssb_test_ptr = NULL; // not flushed
-	rq->kssb_test = false;    // flushed
-#endif
 	rq->mq_hctx = NULL;
 	if (rq->tag != BLK_MQ_NO_TAG)
 		blk_mq_put_tag(hctx->tags, ctx, rq->tag);
@@ -2820,8 +2805,6 @@ static inline struct request *blk_mq_get_cached_request(struct request_queue *q,
 	return rq;
 }
 
-void kssb_test_breakpoint2(void);
-
 /**
  * blk_mq_submit_bio - Create and send a request to block device.
  * @bio: Bio pointer.
@@ -2867,11 +2850,6 @@ void blk_mq_submit_bio(struct bio *bio)
 	blk_mq_bio_to_request(rq, bio, nr_segs);
 
 	ret = blk_crypto_init_request(rq);
-#ifdef CONFIG_KSSB
-	rq->kssb_test_ptr = &kssb_test_var;
-	rq->kssb_test = true;
-	kssb_test_breakpoint2();
-#endif
 	if (ret != BLK_STS_OK) {
 		bio->bi_status = ret;
 		bio_endio(bio);

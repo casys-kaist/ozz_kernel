@@ -173,8 +173,6 @@ static int sbitmap_find_bit_in_index(struct sbitmap *sb, int index,
 	struct sbitmap_word *map = &sb->map[index];
 	int nr;
 
-	sbitmap_deferred_clear(map);
-
 	do {
 		nr = __sbitmap_get_word(&map->word, __map_depth(sb, index),
 					alloc_hint, !sb->round_robin);
@@ -191,11 +189,6 @@ static int __sbitmap_get(struct sbitmap *sb, unsigned int alloc_hint)
 {
 	unsigned int i, index;
 	int nr = -1;
-
-#ifdef CONFIG_KSSB
-	round_robin = false;
-	alloc_hint = 0;
-#endif
 
 	index = SB_NR_TO_INDEX(sb, alloc_hint);
 
@@ -699,7 +692,7 @@ void sbitmap_queue_clear(struct sbitmap_queue *sbq, unsigned int nr,
 {
 	sbitmap_deferred_clear_bit(&sbq->sb, nr);
 
-	kssb_test_breakpoint();
+	pso_test_breakpoint();
 
 	/*
 	 * Pairs with the memory barrier in set_current_state() to ensure the
