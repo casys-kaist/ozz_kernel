@@ -690,6 +690,17 @@ void pso_test_breakpoint(void);
 void sbitmap_queue_clear(struct sbitmap_queue *sbq, unsigned int nr,
 			 unsigned int cpu)
 {
+	/*
+	 * Once the clear bit is set, the bit may be allocated out.
+	 *
+	 * Orders READ/WRITE on the associated instance(such as request
+	 * of blk_mq) by this bit for avoiding race with re-allocation,
+	 * and its pair is the memory barrier implied in __sbitmap_get_word.
+	 *
+	 * One invariant is that the clear bit has to be zero when the bit
+	 * is in use.
+	 */
+	smp_mb__before_atomic();
 	sbitmap_deferred_clear_bit(&sbq->sb, nr);
 
 	pso_test_breakpoint();
