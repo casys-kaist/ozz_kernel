@@ -35,7 +35,7 @@ void kssb_print_store_buffer(void)
 	int bkt, cnt = 0;
 
 	pr_alert("Store buffer entries:\n");
-	hash_for_each (pcpu_buffer->table, bkt, entry, hlist) {
+	hash_for_each(pcpu_buffer->table, bkt, entry, hlist) {
 		cnt++;
 		pr_alert("  addr: %px\n", entry->access.addr);
 		pr_alert("size: %ld\n", entry->access.size);
@@ -69,8 +69,8 @@ static struct kssb_buffer_entry *latest_entry(struct kssb_access *acc)
 	struct kssb_buffer_entry *entry;
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	BUG_ON(!acc->aligned);
-	hash_for_each_possible (pcpu_buffer->table, entry, hlist,
-				(uint64_t)acc->aligned_addr) {
+	hash_for_each_possible(pcpu_buffer->table, entry, hlist,
+			       (uint64_t)acc->aligned_addr) {
 		// Two different addrs are possibly mashed into a same
 		// bucket so we need to check the address
 		if (entry->access.aligned_addr == acc->aligned_addr)
@@ -130,7 +130,9 @@ static void do_buffer_flush(uint64_t aligned_addr)
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	bool flush_all = !aligned_addr;
 
-	hash_for_each_safe (pcpu_buffer->table, bkt, tmp, entry, hlist) {
+	profile_flush(aligned_addr);
+
+	hash_for_each_safe(pcpu_buffer->table, bkt, tmp, entry, hlist) {
 		// We just need to keep the stores' order only for
 		// those having the same destination
 		if (flush_all || entry->access.aligned_addr == aligned_addr)
@@ -157,8 +159,7 @@ static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
 		     aligned_addr);
 
 	bkt = hash_min(aligned_addr, STOREBUFFER_BITS);
-	hlist_for_each_entry_safe (entry, tmp, &pcpu_buffer->table[bkt],
-				   hlist) {
+	hlist_for_each_entry_safe(entry, tmp, &pcpu_buffer->table[bkt], hlist) {
 		if (entry->access.aligned_addr != aligned_addr)
 			continue;
 		flush_single_entry(entry);
@@ -226,6 +227,8 @@ static uint64_t do_buffer_load(struct kssb_access *acc)
 	assert_context(current);
 
 	align_access(acc);
+
+	profile_load(acc);
 
 	if (is_spanning_access(acc)) {
 		flush_spanning_access(acc);
@@ -318,6 +321,8 @@ static void do_buffer_store(struct kssb_access *acc)
 
 	align_access(acc);
 
+	profile_store(acc);
+
 	// We need to populate the page table entry for acc before
 	// storing the entry. Otherwise, the page fault may occurs
 	// when flushing the entry later and the page fault handler
@@ -359,17 +364,17 @@ static bool kssb_enabled(void)
 }
 
 // TODO: support contexts other than task
-#define CAN_EMULATE_KSSB(acc)                                                  \
+#define CAN_EMULATE_KSSB(acc) \
 	(in_task() && kssb_enabled() && !in_stack_page(acc))
 
-#define INIT_KSSB_ACCESS(_addr, _val, _size, _type)                            \
-	{                                                                      \
-		.inst = _RET_IP_, .addr = _addr, .val = _val, .size = _size,   \
-		.type = _type,                                                 \
+#define INIT_KSSB_ACCESS(_addr, _val, _size, _type)                          \
+	{                                                                    \
+		.inst = _RET_IP_, .addr = _addr, .val = _val, .size = _size, \
+		.type = _type,                                               \
 	}
-#define INIT_KSSB_LOAD(_addr, _size)                                           \
+#define INIT_KSSB_LOAD(_addr, _size) \
 	INIT_KSSB_ACCESS(_addr, 0, _size, kssb_load)
-#define INIT_KSSB_STORE(_addr, _val, _size)                                    \
+#define INIT_KSSB_STORE(_addr, _val, _size) \
 	INIT_KSSB_ACCESS(_addr, _val, _size, kssb_store)
 
 static __always_inline uint64_t __load_callback_pso(uint64_t *addr, size_t size)

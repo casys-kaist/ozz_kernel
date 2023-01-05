@@ -13,8 +13,8 @@
 #ifdef __DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
 #else
-#define printk_debug(...)                                                      \
-	do {                                                                   \
+#define printk_debug(...) \
+	do {              \
 	} while (0)
 #endif
 
@@ -67,5 +67,7 @@ bool ___llist_add_batch(struct llist_node *new_first,
 #include "kssb_util.h"
 
 extern bool kssb_initialized;
+
+#include "kssb_profile.h"
 
 #endif // __KSSB_H

@@ -187,6 +187,8 @@ static int __init kssb_init(void)
 		}
 	}
 
+	profile_reset();
+
 	WRITE_ONCE(kssb_initialized, true);
 
 	return 0;
