@@ -81,8 +81,7 @@ static inline bool sbitmap_deferred_clear(struct sbitmap_word *map)
 }
 
 int sbitmap_init_node(struct sbitmap *sb, unsigned int depth, int shift,
-		      gfp_t flags, int node, bool round_robin,
-		      bool alloc_hint)
+		      gfp_t flags, int node, bool round_robin, bool alloc_hint)
 {
 	unsigned int bits_per_word;
 
@@ -235,8 +234,7 @@ int sbitmap_get(struct sbitmap *sb)
 }
 EXPORT_SYMBOL_GPL(sbitmap_get);
 
-static int __sbitmap_get_shallow(struct sbitmap *sb,
-				 unsigned int alloc_hint,
+static int __sbitmap_get_shallow(struct sbitmap *sb, unsigned int alloc_hint,
 				 unsigned long shallow_depth)
 {
 	unsigned int i, index;
@@ -451,7 +449,7 @@ int sbitmap_queue_init_node(struct sbitmap_queue *sbq, unsigned int depth,
 EXPORT_SYMBOL_GPL(sbitmap_queue_init_node);
 
 static inline void __sbitmap_queue_update_wake_batch(struct sbitmap_queue *sbq,
-					    unsigned int wake_batch)
+						     unsigned int wake_batch)
 {
 	int i;
 
@@ -478,7 +476,7 @@ static void sbitmap_queue_update_wake_batch(struct sbitmap_queue *sbq,
 }
 
 void sbitmap_queue_recalculate_wake_batch(struct sbitmap_queue *sbq,
-					    unsigned int users)
+					  unsigned int users)
 {
 	unsigned int wake_batch;
 	unsigned int min_batch;
@@ -486,8 +484,8 @@ void sbitmap_queue_recalculate_wake_batch(struct sbitmap_queue *sbq,
 
 	min_batch = sbq->sb.depth >= (4 * SBQ_WAIT_QUEUES) ? 4 : 1;
 
-	wake_batch = clamp_val(depth / SBQ_WAIT_QUEUES,
-			min_batch, SBQ_WAKE_BATCH);
+	wake_batch =
+		clamp_val(depth / SBQ_WAIT_QUEUES, min_batch, SBQ_WAKE_BATCH);
 	__sbitmap_queue_update_wake_batch(sbq, wake_batch);
 }
 EXPORT_SYMBOL_GPL(sbitmap_queue_recalculate_wake_batch);
@@ -532,7 +530,7 @@ unsigned long __sbitmap_queue_get_batch(struct sbitmap_queue *sbq, int nr_tags,
 
 		nr = find_first_zero_bit(&map->word, map_depth);
 		if (nr + nr_tags <= map_depth) {
-			atomic_long_t *ptr = (atomic_long_t *) &map->word;
+			atomic_long_t *ptr = (atomic_long_t *)&map->word;
 			int map_tags = min_t(int, nr_tags, map_depth);
 			unsigned long val, ret;
 
@@ -541,13 +539,15 @@ unsigned long __sbitmap_queue_get_batch(struct sbitmap_queue *sbq, int nr_tags,
 				val = READ_ONCE(map->word);
 				if ((val & ~get_mask) != val)
 					goto next;
-				ret = atomic_long_cmpxchg(ptr, val, get_mask | val);
+				ret = atomic_long_cmpxchg(ptr, val,
+							  get_mask | val);
 			} while (ret != val);
 			get_mask = (get_mask & ~ret) >> nr;
 			if (get_mask) {
 				*offset = nr + (index << sb->shift);
 				update_alloc_hint_after_get(sb, depth, hint,
-							*offset + map_tags - 1);
+							    *offset + map_tags -
+								    1);
 				return get_mask;
 			}
 		}
@@ -654,8 +654,8 @@ static inline void sbitmap_update_cpu_hint(struct sbitmap *sb, int cpu, int tag)
 		data_race(*per_cpu_ptr(sb->alloc_hint, cpu) = tag);
 }
 
-void sbitmap_queue_clear_batch(struct sbitmap_queue *sbq, int offset,
-				int *tags, int nr_tags)
+void sbitmap_queue_clear_batch(struct sbitmap_queue *sbq, int offset, int *tags,
+			       int nr_tags)
 {
 	struct sbitmap *sb = &sbq->sb;
 	unsigned long *addr = NULL;
@@ -672,7 +672,7 @@ void sbitmap_queue_clear_batch(struct sbitmap_queue *sbq, int offset,
 		if (!addr) {
 			addr = this_addr;
 		} else if (addr != this_addr) {
-			atomic_long_andnot(mask, (atomic_long_t *) addr);
+			atomic_long_andnot(mask, (atomic_long_t *)addr);
 			mask = 0;
 			addr = this_addr;
 		}
@@ -680,12 +680,12 @@ void sbitmap_queue_clear_batch(struct sbitmap_queue *sbq, int offset,
 	}
 
 	if (mask)
-		atomic_long_andnot(mask, (atomic_long_t *) addr);
+		atomic_long_andnot(mask, (atomic_long_t *)addr);
 
 	smp_mb__after_atomic();
 	sbitmap_queue_wake_up(sbq);
 	sbitmap_update_cpu_hint(&sbq->sb, raw_smp_processor_id(),
-					tags[nr_tags - 1] - offset);
+				tags[nr_tags - 1] - offset);
 }
 
 void pso_test_breakpoint(void);
@@ -706,7 +706,7 @@ void sbitmap_queue_clear(struct sbitmap_queue *sbq, unsigned int nr,
 	smp_mb__before_atomic();
 	sbitmap_deferred_clear_bit(&sbq->sb, nr);
 
-	pso_test_breakpoint();
+	/* pso_test_breakpoint(); */
 
 	/*
 	 * Pairs with the memory barrier in set_current_state() to ensure the

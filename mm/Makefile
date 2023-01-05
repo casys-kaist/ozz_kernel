@@ -2,17 +2,6 @@
 #
 # Makefile for the linux memory manager.
 #
-KSSB_INSTRUMENT := y
-export KSSB_INSTRUMENT
-
-# KSSB force
-KSSB_INSTRUMENT_slab_common.o := N
-# KSSB force
-KSSB_INSTRUMENT_slab.o := N
-# KSSB force
-KSSB_INSTRUMENT_slub.o := N
-# KSSB force	
-KSSB_INSTRUMENT_kmemleak.o := N
 
 KASAN_SANITIZE_slab_common.o := n
 KASAN_SANITIZE_slab.o := n

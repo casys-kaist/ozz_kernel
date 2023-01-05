@@ -3,9 +3,6 @@
 # Cryptographic API
 #
 
-KSSB_INSTRUMENT :=y
-export KSSB_INSTRUMENT
-
 obj-$(CONFIG_CRYPTO) += crypto.o
 crypto-y := api.o cipher.o compress.o
 

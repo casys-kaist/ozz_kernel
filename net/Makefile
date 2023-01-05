@@ -6,9 +6,6 @@
 # Rewritten to use lists instead of if-statements.
 #
 
-KSSB_INSTRUMENT := y
-export KSSB_INSTRUMENT
-
 obj-y				:= devres.o socket.o core/
 
 obj-$(CONFIG_COMPAT)		+= compat.o
