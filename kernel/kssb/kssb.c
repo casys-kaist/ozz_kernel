@@ -166,7 +166,7 @@ static int __init kssb_init(void)
 	buffer_size = BUFFER_PAGES * PAGE_SIZE;
 	num_entries = buffer_size / sizeof(struct kssb_buffer_entry);
 
-	for_each_possible_cpu (cpu) {
+	for_each_possible_cpu(cpu) {
 		printk(KERN_INFO "Allocating pages (CPU #%d)\n", cpu);
 		printk(KERN_INFO "  size       %d\n", buffer_size);
 		printk(KERN_INFO "  entry size %d\n",
@@ -196,7 +196,7 @@ static void kssb_cleanup(void)
 {
 	int cpu;
 	void *pcpu_page;
-	for_each_possible_cpu (cpu) {
+	for_each_possible_cpu(cpu) {
 		pcpu_page = per_cpu(kssb_buffer_pages, cpu);
 		vfree(pcpu_page);
 	}
@@ -208,6 +208,7 @@ static void kssb_cleanup(void)
 // per-task emulation. NOTE: Should be volatile since there is no
 // statement that changes the value in source codes.
 #ifdef __TEST_KSSB
+#pragma message("enable kssb from the booting")
 volatile char __ssb_do_emulate = true;
 #else
 volatile char __ssb_do_emulate = false;
