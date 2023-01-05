@@ -6,6 +6,9 @@
 # Rewritten to use lists instead of if-statements.
 #
 
+KSSB_INSTRUMENT := y
+export KSSB_INSTRUMENT
+
 obj-y				+= irqchip/
 obj-y				+= bus/
 
