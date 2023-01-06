@@ -6,6 +6,8 @@
 # Rewritten to use lists instead of if-statements.
 # 
 
+KSSB_INSTRUMENT := y
+export KSSB_INSTRUMENT
 obj-$(CONFIG_SYSCTL)		+= sysctls.o
 
 obj-y :=	open.o read_write.o file_table.o super.o \

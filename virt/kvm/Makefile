@@ -1,3 +1,6 @@
+KSSB_INSTRUMENT := y
+export KSSB_INSTRUMENT
+
 ccflags-y += -I $(srctree)/arch/x86/kvm
 ccflags-$(CONFIG_KVM_WERROR) += -Werror
 
