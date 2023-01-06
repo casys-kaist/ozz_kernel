@@ -5,11 +5,7 @@
 
 #include "kssb.h"
 
-typedef atomic64_t kssb_stat;
-
-kssb_stat stat_load;
-kssb_stat stat_store;
-kssb_stat stat_flush;
+struct kssb_stat_t kssb_stat;
 
 bool kssb_do_profile = false;
 
@@ -17,26 +13,24 @@ void profile_load(struct kssb_access *acc)
 {
 	if (kssb_do_profile)
 		return;
-	atomic64_add(1, &stat_load);
+	atomic64_add(1, &kssb_stat.load_count);
 }
 
 void profile_store(struct kssb_access *acc)
 {
 	if (kssb_do_profile)
 		return;
-	atomic64_add(1, &stat_store);
+	atomic64_add(1, &kssb_stat.store_count);
 }
 
 void profile_flush(uint64_t aligned_addr)
 {
 	if (kssb_do_profile)
 		return;
-	atomic64_add(1, &stat_flush);
+	atomic64_add(1, &kssb_stat.flush_count);
 }
 
 void profile_reset(void)
 {
-	atomic64_set(&stat_load, 0);
-	atomic64_set(&stat_store, 0);
-	atomic64_set(&stat_flush, 0);
+	memset(&kssb_stat, 0, sizeof(struct kssb_stat_t));
 }

@@ -189,19 +189,25 @@ static int __init kssb_init(void)
 
 	profile_reset();
 
+	kssb_debugfs_init();
+
 	WRITE_ONCE(kssb_initialized, true);
 
 	return 0;
 }
 
-static void kssb_cleanup(void)
+static void __exit kssb_cleanup(void)
 {
 	int cpu;
 	void *pcpu_page;
+
+	kssb_debugfs_cleanup();
+
 	for_each_possible_cpu(cpu) {
 		pcpu_page = per_cpu(kssb_buffer_pages, cpu);
 		vfree(pcpu_page);
 	}
+
 	cleanup_flush_vector();
 }
 

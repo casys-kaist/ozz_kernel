@@ -6,10 +6,6 @@
 #include <linux/init.h>
 #include <linux/sched.h>
 
-// XXX: We really don't want to leave any of API calls as they may use
-// atomic operations. Enabling debugging possibly change the bahavior
-// of store buffer.
-// TODO: Use Linux APIs
 #ifdef __DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
 #else
@@ -68,6 +64,7 @@ bool ___llist_add_batch(struct llist_node *new_first,
 
 extern bool kssb_initialized;
 
-#include "kssb_profile.h"
+#include "profile.h"
+#include "debugfs.h"
 
 #endif // __KSSB_H

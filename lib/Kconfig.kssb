@@ -1,14 +1,22 @@
 menuconfig KSSB
-	bool "SoftStoreBuffer"
-	help
-	  Software emulation of store buffer
+    bool "SoftStoreBuffer"
+    help
+      Software emulation of store buffer
 
 menuconfig KSSB_SWITCH
-	bool "StoftStoreBuffer switch"
-	help
-	  Using the kssb switch
+    bool "StoftStoreBuffer switch"
+	depends on KSSB
+    help
+      Using the kssb switch
 
 menuconfig KSSB_BINARY
     bool "SoftStoreBuffer binary mode"
-	help
-	  Keeping only one entry for the given addr
+	depends on KSSB
+    help
+      Keeping only one entry for the given addr
+
+menuconfig KSSB_PROFILE
+    bool "SoftStoreBuffer profile"
+	depends on KSSB
+    help
+      Profile
