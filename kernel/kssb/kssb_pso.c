@@ -367,21 +367,22 @@ static bool kssb_enabled(void)
 #define CAN_EMULATE_KSSB(acc) \
 	(in_task() && kssb_enabled() && !in_stack_page(acc))
 
-#define INIT_KSSB_ACCESS(_addr, _val, _size, _type)                          \
-	{                                                                    \
-		.inst = _RET_IP_, .addr = _addr, .val = _val, .size = _size, \
-		.type = _type,                                               \
+#define INIT_KSSB_ACCESS(_addr, _val, _size, _type, inst)                \
+	{                                                                \
+		.inst = inst, .addr = _addr, .val = _val, .size = _size, \
+		.type = _type,                                           \
 	}
-#define INIT_KSSB_LOAD(_addr, _size) \
-	INIT_KSSB_ACCESS(_addr, 0, _size, kssb_load)
-#define INIT_KSSB_STORE(_addr, _val, _size) \
-	INIT_KSSB_ACCESS(_addr, _val, _size, kssb_store)
+#define INIT_KSSB_LOAD(_addr, _size, inst) \
+	INIT_KSSB_ACCESS(_addr, 0, _size, kssb_load, inst)
+#define INIT_KSSB_STORE(_addr, _val, _size, inst) \
+	INIT_KSSB_ACCESS(_addr, _val, _size, kssb_store, inst)
 
-static __always_inline uint64_t __load_callback_pso(uint64_t *addr, size_t size)
+static uint64_t __load_callback_pso(uint64_t *addr, size_t size,
+				    unsigned long inst)
 {
 	uint64_t ret;
 	unsigned long flags;
-	struct kssb_access acc = INIT_KSSB_LOAD(addr, size);
+	struct kssb_access acc = INIT_KSSB_LOAD(addr, size, inst);
 
 	__sanitize_memcov_trace_load(acc.inst, addr, size);
 	__kssb_check_access(&acc);
@@ -395,11 +396,11 @@ static __always_inline uint64_t __load_callback_pso(uint64_t *addr, size_t size)
 	return ret;
 }
 
-static __always_inline void __store_callback_pso(uint64_t *addr, uint64_t val,
-						 size_t size)
+static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size,
+				 unsigned long inst)
 {
 	unsigned long flags;
-	struct kssb_access acc = INIT_KSSB_STORE(addr, val, size);
+	struct kssb_access acc = INIT_KSSB_STORE(addr, val, size, inst);
 
 	__sanitize_memcov_trace_store(acc.inst, addr, size);
 	__kssb_check_access(&acc);
