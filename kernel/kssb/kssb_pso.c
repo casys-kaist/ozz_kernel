@@ -101,10 +101,16 @@ static void store_entry(struct kssb_buffer_entry *entry,
 		 (uint64_t)acc->aligned_addr);
 }
 
+static void __store_single_memcov_trace(struct kssb_access *acc)
+{
+	__sanitize_memcov_trace_store(acc->inst, acc->addr, acc->size);
+	__store_single(acc);
+}
+
 static void __flush_single_entry_po_preserve(struct kssb_access *acc)
 {
 	do_buffer_flush(acc->aligned_addr);
-	__store_single(acc);
+	__store_single_memcov_trace(acc);
 }
 
 static void flush_single_entry(struct kssb_buffer_entry *entry)
@@ -117,7 +123,7 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	// expectation is not met.
 	/* BUG_ON(in_page_fault_handler() && */
 	/*        kssb_page_net_present(&entry->access)); */
-	__store_single(&entry->access);
+	__store_single_memcov_trace(&entry->access);
 	hash_del(&entry->hlist);
 	reclaim_entry(entry);
 }
@@ -332,7 +338,7 @@ static void do_buffer_store(struct kssb_access *acc)
 
 	if (is_spanning_access(acc)) {
 		flush_spanning_access(acc);
-		__store_single(acc);
+		__store_single_memcov_trace(acc);
 		return;
 	}
 
@@ -402,7 +408,6 @@ static void __store_callback_pso(uint64_t *addr, uint64_t val, size_t size,
 	unsigned long flags;
 	struct kssb_access acc = INIT_KSSB_STORE(addr, val, size, inst);
 
-	__sanitize_memcov_trace_store(acc.inst, addr, size);
 	__kssb_check_access(&acc);
 
 	raw_local_irq_save(flags);
