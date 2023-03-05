@@ -242,7 +242,7 @@ static int kmemcov_mmap(struct file *filp, struct vm_area_struct *vma)
 		goto exit;
 	}
 	spin_unlock(&kmemcov->lock);
-	vma->vm_flags |= VM_DONTEXPAND;
+	vm_flags_set(vma, VM_DONTEXPAND);
 	for (off = 0; off < size; off += PAGE_SIZE) {
 		page = vmalloc_to_page(kmemcov->area + off);
 		if (vm_insert_page(vma, vma->vm_start + off, page))
