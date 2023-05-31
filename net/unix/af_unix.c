@@ -316,7 +316,8 @@ static void __unix_set_addr_hash(struct net *net, struct sock *sk,
 				 struct unix_address *addr, unsigned int hash)
 {
 	__unix_remove_socket(sk);
-	smp_store_release(&unix_sk(sk)->addr, addr);
+	/* smp_store_release(&unix_sk(sk)->addr, addr); */
+	unix_sk(sk)->addr = addr;
 
 	sk->sk_hash = hash;
 	__unix_insert_socket(net, sk);
