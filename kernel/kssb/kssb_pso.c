@@ -374,8 +374,9 @@ static bool kssb_enabled(void)
 }
 
 // TODO: support contexts other than task
-#define CAN_EMULATE_KSSB(acc) \
-	(in_task() && kssb_enabled() && !in_stack_page(acc))
+#define in_kssb_enabled_task() (in_task() && kssb_enabled())
+
+#define CAN_EMULATE_KSSB(acc) (in_kssb_enabled_task() && !in_stack_page(acc))
 
 #define INIT_KSSB_ACCESS(_addr, _val, _size, _type, inst)                \
 	{                                                                \
@@ -432,19 +433,37 @@ static void __flush_callback_pso(void)
 	raw_local_irq_restore(flags);
 }
 
-static bool is_instrumented_address(void *ret)
-{
-	return false;
-}
-
 static void __retchk_callback_pso(void *ret)
 {
-	if (!is_instrumented_address(ret))
+	unsigned long flags;
+
+	if (!in_kssb_enabled_task())
+		return;
+
+	raw_local_irq_save(flags);
+	if (!is_instrumented_address(ret)) {
+		profile_retchk(ret);
 		__flush_callback_pso();
+	}
+	raw_local_irq_restore(flags);
 }
 
 static void __funcentry_callback_pso(void *ret)
 {
+	unsigned long flags;
+	struct storebuffer *pcpu_buffer;
+
+	if (!in_kssb_enabled_task())
+		return;
+
+	// TODO: Not sure we need to disable IRQs. Do it to be safe.
+	raw_local_irq_save(flags);
+	pcpu_buffer = this_cpu_ptr(&buffer);
+	if (pcpu_buffer->emulating) {
+		profile_funcentry(ret);
+		set_instrumented_address(ret);
+	}
+	raw_local_irq_restore(flags);
 }
 
 #define MEMORYMODEL pso

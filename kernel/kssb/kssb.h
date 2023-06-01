@@ -66,5 +66,6 @@ extern bool kssb_initialized;
 
 #include "profile.h"
 #include "debugfs.h"
+#include "instrumentation_tracker.h"
 
 #endif // __KSSB_H

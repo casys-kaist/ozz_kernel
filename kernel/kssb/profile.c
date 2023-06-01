@@ -11,23 +11,37 @@ bool kssb_do_profile = false;
 
 void profile_load(struct kssb_access *acc)
 {
-	if (kssb_do_profile)
+	if (!kssb_do_profile)
 		return;
 	atomic64_add(1, &kssb_stat.load_count);
 }
 
 void profile_store(struct kssb_access *acc)
 {
-	if (kssb_do_profile)
+	if (!kssb_do_profile)
 		return;
 	atomic64_add(1, &kssb_stat.store_count);
 }
 
 void profile_flush(uint64_t aligned_addr)
 {
-	if (kssb_do_profile)
+	if (!kssb_do_profile)
 		return;
 	atomic64_add(1, &kssb_stat.flush_count);
+}
+
+void profile_retchk(void *ret)
+{
+	if (!kssb_do_profile)
+		return;
+	atomic64_add(1, &kssb_stat.retchk_count);
+}
+
+void profile_funcentry(void *ret)
+{
+	if (!kssb_do_profile)
+		return;
+	atomic64_add(1, &kssb_stat.funcentry_count);
 }
 
 void profile_reset(void)

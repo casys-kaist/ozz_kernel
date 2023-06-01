@@ -10,13 +10,18 @@ struct kssb_stat_t {
 	atomic64_t load_count;
 	atomic64_t store_count;
 	atomic64_t flush_count;
+	atomic64_t retchk_count;
+	atomic64_t funcentry_count;
 };
 
 extern struct kssb_stat_t kssb_stat;
+extern bool kssb_do_profile;
 
 void profile_load(struct kssb_access *);
 void profile_store(struct kssb_access *);
 void profile_flush(uint64_t);
+void profile_retchk(void *);
+void profile_funcentry(void *);
 void profile_reset(void);
 #else
 #define profile_load(...) \
@@ -30,6 +35,12 @@ void profile_reset(void);
 	} while (0)
 #define profile_reset(...) \
 	do {               \
+	} while (0)
+#define profile_retchk(...) \
+	do {                \
+	} while (0)
+#define profile_funcentry(...) \
+	do {                   \
 	} while (0)
 #endif
 
