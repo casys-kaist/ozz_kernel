@@ -439,9 +439,14 @@ static void __retchk_callback_pso(void *ret)
 		__flush_callback_pso();
 }
 
+static void __funcentry_callback_pso(void *ret)
+{
+}
+
 #define MEMORYMODEL pso
 #define STORE_CALLBACK_IMPL __store_callback_pso
 #define LOAD_CALLBACK_IMPL __load_callback_pso
 #define FLUSH_CALLBACK_IMPL __flush_callback_pso
 #define RETCHK_CALLBACK_IMPL __retchk_callback_pso
+#define FUNCENTRY_CALLBACK_IMPL __funcentry_callback_pso
 #include "callback.h"

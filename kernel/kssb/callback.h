@@ -38,13 +38,13 @@
 						  uint##_BITS##_t val)
 
 // The val argument (typed uintN_t) will be promoted to uint64_t
-#define __DECLARE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)        \
-	__DEFINE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)         \
-	{                                                            \
-		unsigned long inst = _RET_IP_;                        \
-		uint64_t _val = (uint64_t)val & _BIT_MASK(_BITS);    \
-		STORE_CALLBACK_IMPL((uint64_t *)addr, _val, _BYTES, inst);	 \
-	}                                                            \
+#define __DECLARE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)              \
+	__DEFINE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)               \
+	{                                                                  \
+		unsigned long inst = _RET_IP_;                             \
+		uint64_t _val = (uint64_t)val & _BIT_MASK(_BITS);          \
+		STORE_CALLBACK_IMPL((uint64_t *)addr, _val, _BYTES, inst); \
+	}                                                                  \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_store##_BYTES);
 
 #define __DEFINE_LOAD_CALLBACK(_MEMORYMODEL, _BYTES, _BITS) \
@@ -52,16 +52,16 @@
 
 // The return value of LOAD_CALLBACK_IMPL (typed uint64_t) will be
 // demoted to uintN_t
-#define __DECLARE_LOAD_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)          \
-	__DEFINE_LOAD_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)           \
-	{                                                             \
-		unsigned long inst = _RET_IP_;                        \
-		uint##_BITS##_t val =                                 \
-				LOAD_CALLBACK_IMPL((uint64_t *)addr, _BYTES, inst);	\
-		uint##_BITS##_t _val =                                \
-			(uint##_BITS##_t)(val & _BIT_MASK(_BITS));    \
-		return _val;                                          \
-	}                                                             \
+#define __DECLARE_LOAD_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)                \
+	__DEFINE_LOAD_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)                 \
+	{                                                                   \
+		unsigned long inst = _RET_IP_;                              \
+		uint##_BITS##_t val =                                       \
+			LOAD_CALLBACK_IMPL((uint64_t *)addr, _BYTES, inst); \
+		uint##_BITS##_t _val =                                      \
+			(uint##_BITS##_t)(val & _BIT_MASK(_BITS));          \
+		return _val;                                                \
+	}                                                                   \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_load##_BYTES);
 
 #define __DEFINE_FLUSH_CALLBACK(_MEMORYMODEL) \
@@ -84,11 +84,24 @@
 	}                                      \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_retchk);
 
+#define __DEFINE_FUNCENTRY_CALLBACK(_MEMORYMODEL) \
+	void __ssb_##_MEMORYMODEL##_funcentry(void *ret)
+
+#define _DECLARE_FUNCENTRY_CALLBACK(_MEMORYMODEL) \
+	__DEFINE_FUNCENTRY_CALLBACK(_MEMORYMODEL) \
+	{                                         \
+		FUNCENTRY_CALLBACK_IMPL(ret);     \
+	}                                         \
+	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_funcentry);
+
 #define DECLARE_FLUSH_CALLBACK(_MEMORYMODEL) \
 	_DECLARE_FLUSH_CALLBACK(_MEMORYMODEL)
 
 #define DECLARE_RETCHK_CALLBACK(_MEMORYMODEL) \
 	_DECLARE_RETCHK_CALLBACK(_MEMORYMODEL)
+
+#define DECLARE_FUNCENTRY_CALLBACK(_MEMORYMODEL) \
+	_DECLARE_FUNCENTRY_CALLBACK(_MEMORYMODEL)
 
 #define __DECLARE_STORE_LOAD_CALLBACK(_MEMORYMODEL, _BYTES, _BITS) \
 	__DECLARE_STORE_CALLBACK(_MEMORYMODEL, _BYTES, _BITS)      \
@@ -104,3 +117,4 @@ DECLARE_STORE_LOAD_CALLBACK(4);
 DECLARE_STORE_LOAD_CALLBACK(8);
 DECLARE_FLUSH_CALLBACK(MEMORYMODEL);
 DECLARE_RETCHK_CALLBACK(MEMORYMODEL);
+DECLARE_FUNCENTRY_CALLBACK(MEMORYMODEL);
