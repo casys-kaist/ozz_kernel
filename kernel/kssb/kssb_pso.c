@@ -17,6 +17,7 @@
 #define STOREBUFFER_BITS 10
 struct storebuffer {
 	DECLARE_HASHTABLE(table, STOREBUFFER_BITS);
+	bool emulating;
 };
 
 static DEFINE_PER_CPU(struct storebuffer, buffer) = {
@@ -97,6 +98,7 @@ static void store_entry(struct kssb_buffer_entry *entry,
 {
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	BUG_ON(!acc->aligned);
+	pcpu_buffer->emulating = true;
 	hash_add(pcpu_buffer->table, &(entry->hlist),
 		 (uint64_t)acc->aligned_addr);
 }
@@ -146,9 +148,11 @@ static void do_buffer_flush(uint64_t aligned_addr)
 	}
 	BUG_ON(flush_all && !hash_empty(pcpu_buffer->table));
 
-	if (flush_all)
+	if (flush_all) {
 		// Now the store buffer does not contain any entries.
 		reset_context();
+		pcpu_buffer->emulating = false;
+	}
 }
 
 static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
