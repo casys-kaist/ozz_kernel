@@ -16,16 +16,21 @@ noinline void pso_test_breakpoint(void)
 	nothing = 0;
 }
 
-__attribute__((softstorebuffer)) static void do_writer(bool do_sleep,
-						       bool disable_irq)
+noinline void pso_do_nothing(void)
+{
+	nothing = 0;
+}
+
+__attribute__((softstorebuffer)) static void
+do_writer(bool do_sleep, bool disable_irq, bool funccall)
 {
 	struct shared_t *ptr = (struct shared_t *)&shared;
 	int *iptr = (int *)kmalloc(sizeof(*ptr->ptr), GFP_KERNEL);
-	printk(KERN_INFO "%s: do_sleep: %d disable_irq: %d\n", __func__,
-	       do_sleep, disable_irq);
 	if (disable_irq)
 		local_irq_disable();
 	ptr->ptr = iptr;
+	if (funccall)
+		pso_do_nothing();
 	ptr->ready = true;
 	if (!do_sleep)
 		// NOTE: As of milestone-0.4, the return check
@@ -62,9 +67,10 @@ __attribute__((softstorebuffer)) static void do_reader(bool do_sleep,
 		local_irq_enable();
 }
 
-SYSCALL_DEFINE2(ssb_pso_writer, bool, do_sleep, bool, disable_irq)
+SYSCALL_DEFINE3(ssb_pso_writer, bool, do_sleep, bool, disable_irq, bool,
+		funccall)
 {
-	do_writer(do_sleep, disable_irq);
+	do_writer(do_sleep, disable_irq, funccall);
 	return 0;
 }
 
