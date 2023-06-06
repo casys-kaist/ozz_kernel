@@ -21,6 +21,12 @@ ifdef CONFIG_FUNCTION_TRACER
 CFLAGS_REMOVE_irq_work.o = $(CC_FLAGS_FTRACE)
 endif
 
+KSSB_INSTRUMENT := y
+KSSB_INSTRUMENT_softirq.o := n
+KSSB_INSTRUMENT_extable.o := n
+KSSB_INSTRUMENT_stacktrace.o := n
+KSSB_INSTRUMENT_kcov.o := N
+
 # Prevents flicker of uninteresting __do_softirq()/__local_bh_disable_ip()
 # in coverage traces.
 KCOV_INSTRUMENT_softirq.o := n

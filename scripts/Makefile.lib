@@ -174,13 +174,10 @@ endif
 # n: instrument the flush callback only
 # N: not instrument at all
 ifeq ($(CONFIG_KSSB),y)
-ifeq ($(patsubst y%,, \
-		$(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),)
-_c_flags += $(CFLAGS_KSSB)
-else ifeq ($(patsubst n%,, \
-		$(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),)
-_c_flags += $(CFLAGS_KSSB_FLUSHONLY)
-endif
+  _c_flags += $(if $(patsubst y%,, \
+    $(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),,$(CFLAGS_KSSB))
+  _c_flags += $(if $(patsubst n%,, \
+    $(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),,$(CFLAGS_KSSB_FLUSHONLY))
 endif
 
 #
