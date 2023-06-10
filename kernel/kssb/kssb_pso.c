@@ -47,6 +47,15 @@ void kssb_print_store_buffer(void)
 }
 EXPORT_SYMBOL(kssb_print_store_buffer);
 
+static void set_emulating(bool emulating)
+{
+	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	pcpu_buffer->emulating = emulating;
+}
+
+#define declare_emulating() set_emulating(true)
+#define revoke_emulating() set_emulating(false)
+
 static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 {
 	struct kssb_buffer_entry *entry = new_entry();
@@ -98,7 +107,6 @@ static void store_entry(struct kssb_buffer_entry *entry,
 {
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	BUG_ON(!acc->aligned);
-	pcpu_buffer->emulating = true;
 	hash_add(pcpu_buffer->table, &(entry->hlist),
 		 (uint64_t)acc->aligned_addr);
 }
@@ -151,7 +159,6 @@ static void do_buffer_flush(uint64_t aligned_addr)
 	if (flush_all) {
 		// Now the store buffer does not contain any entries.
 		reset_context();
-		pcpu_buffer->emulating = false;
 	}
 }
 
@@ -226,6 +233,7 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
 
 	do_buffer_flush_after_insn(acc);
+
 	return ret;
 }
 
@@ -235,9 +243,9 @@ static uint64_t do_buffer_load(struct kssb_access *acc)
 		     acc->size);
 
 	assert_context(current);
+	declare_emulating();
 
 	align_access(acc);
-
 	profile_load(acc);
 
 	if (is_spanning_access(acc)) {
@@ -328,9 +336,9 @@ static void do_buffer_store(struct kssb_access *acc)
 		     acc->val, acc->size);
 
 	assert_context(current);
+	declare_emulating();
 
 	align_access(acc);
-
 	profile_store(acc);
 
 	// We need to populate the page table entry for acc before
@@ -430,6 +438,7 @@ static void __flush_callback_pso(void)
 	// The flush callback should be called regardless of the
 	// context.
 	do_buffer_flush(0);
+	revoke_emulating();
 	raw_local_irq_restore(flags);
 }
 
@@ -446,6 +455,7 @@ static void __retchk_callback_pso(void *ret)
 		__flush_callback_pso();
 	}
 	raw_local_irq_restore(flags);
+
 }
 
 static void __funcentry_callback_pso(void *ret)
