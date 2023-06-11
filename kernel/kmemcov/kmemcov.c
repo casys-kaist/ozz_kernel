@@ -47,19 +47,17 @@ static bool notrace check_kmemcov_mode(enum kmemcov_mode needed_mode,
 #define get_clock() atomic_fetch_inc(&kmemcov_clock)
 // level 0 indicates the store/load callbacks, and level 1 indicates
 // the caller of the kssb callbacks.
-#define INIT_KMEMCOV_ACCESS(inst, addr, size, write)                           \
-	{                                                                      \
-		.inst = inst,                                                  \
-		.type = (write ? KMEMCOV_ACCESS_STORE : KMEMCOV_ACCESS_LOAD),  \
-		.addr = (uint64_t)addr, .size = size,                          \
-		.timestamp = get_clock(),                                      \
+#define INIT_KMEMCOV_ACCESS(inst, addr, size, type)                 \
+	{                                                           \
+		.inst = inst, .type = type, .addr = (uint64_t)addr, \
+		.size = size, .timestamp = get_clock(),             \
 	}
 
-static void __always_inline notrace __sanitize_memcov_trace_access_safe(
-	unsigned long inst, void *addr, size_t size, bool write)
+static void __always_inline notrace
+__sanitize_memcov_trace_access_safe(unsigned long inst, void *addr, size_t size,
+				    enum kmemcov_access_type type)
 {
-	struct kmemcov_access acc =
-		INIT_KMEMCOV_ACCESS(inst, addr, size, write);
+	struct kmemcov_access acc = INIT_KMEMCOV_ACCESS(inst, addr, size, type);
 	struct task_struct *t = current;
 	struct kmemcov_access *area;
 	unsigned long pos, *posp;
@@ -68,9 +66,16 @@ static void __always_inline notrace __sanitize_memcov_trace_access_safe(
 		return;
 
 	area = t->kmemcov_area;
-	/* The first 64-bit word is the number of subsequent PCs. */
+	// The first 64-bit word is the number of recorded events.
 	posp = (unsigned long *)&area[0];
-	pos = READ_ONCE(*posp) + 1;
+	pos = READ_ONCE(*posp);
+
+	// We don't have to record subsequent flushes.
+	if (pos > 0 && type == KMEMCOV_ACCESS_FLUSH &&
+	    area[pos].type == KMEMCOV_ACCESS_FLUSH)
+		return;
+
+	pos++;
 	if (likely(pos < t->kmemcov_size)) {
 		memcpy(&area[pos], &acc, sizeof(acc));
 		WRITE_ONCE(*posp, pos);
@@ -83,7 +88,19 @@ static void __always_inline notrace __sanitize_memcov_trace_access(
 	struct task_struct *t = current;
 	if (!check_kmemcov_mode(KMEMCOV_MODE_TRACE_STLD, t))
 		return;
-	__sanitize_memcov_trace_access_safe(inst, addr, size, write);
+	__sanitize_memcov_trace_access_safe(inst, addr, size,
+					    (write ? KMEMCOV_ACCESS_STORE :
+							   KMEMCOV_ACCESS_LOAD));
+}
+
+static void __always_inline notrace __sanitize_memcov_trace_flush(void)
+{
+	// TODO: We do not record information other than a flush operation
+	// is executed. Not sure we want to do it.
+	struct task_struct *t = current;
+	if (!check_kmemcov_mode(KMEMCOV_MODE_TRACE_STLD, t))
+		return;
+	__sanitize_memcov_trace_access_safe(0, 0, 0, KMEMCOV_ACCESS_FLUSH);
 }
 
 void __sanitize_memcov_trace_store(unsigned long inst, void *addr, size_t size)
@@ -100,7 +117,7 @@ EXPORT_SYMBOL(__sanitize_memcov_trace_load);
 
 void sanitize_memcov_trace_store(const volatile void *addr, size_t size)
 {
-	__sanitize_memcov_trace_store(_RET_IP_, (void *) addr, size);
+	__sanitize_memcov_trace_store(_RET_IP_, (void *)addr, size);
 }
 EXPORT_SYMBOL(sanitize_memcov_trace_store);
 
@@ -109,6 +126,12 @@ void sanitize_memcov_trace_load(const volatile void *addr, size_t size)
 	__sanitize_memcov_trace_load(_RET_IP_, (void *)addr, size);
 }
 EXPORT_SYMBOL(sanitize_memcov_trace_load);
+
+void sanitize_memcov_trace_flush(void)
+{
+	__sanitize_memcov_trace_flush();
+}
+EXPORT_SYMBOL(sanitize_memcov_trace_flush);
 
 static void kmemcov_get(struct kmemcov *kmemcov)
 {
