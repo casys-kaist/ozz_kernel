@@ -438,6 +438,7 @@ static void __flush_callback_pso(void)
 	// The flush callback should be called regardless of the
 	// context.
 	do_buffer_flush(0);
+	sanitize_memcov_trace_flush();
 	revoke_emulating();
 	raw_local_irq_restore(flags);
 }
@@ -455,7 +456,6 @@ static void __retchk_callback_pso(void *ret)
 		__flush_callback_pso();
 	}
 	raw_local_irq_restore(flags);
-
 }
 
 static void __funcentry_callback_pso(void *ret)
