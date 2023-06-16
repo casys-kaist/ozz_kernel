@@ -32,8 +32,8 @@ extern void __ssb_pso_flush(char *);
 #define kssb_flush() do {} while(0)
 #endif
 
-#define kssb_flush_release() do {} while(0)
-#define kssb_flush_acquire() kssb_flush()
+#define kssb_flush_release() kssb_flush()
+#define kssb_flush_acquire() do {} while(0)
 
 static __always_inline int
 atomic_read(const atomic_t *v)
@@ -60,6 +60,7 @@ atomic_set(atomic_t *v, int i)
 static __always_inline void
 atomic_set_release(atomic_t *v, int i)
 {
+	kssb_flush_release();
 	kcsan_release();
 	instrument_atomic_write(v, sizeof(*v));
 	arch_atomic_set_release(v, i);
@@ -1386,7 +1387,6 @@ atomic64_dec_if_positive(atomic64_t *v)
 	return arch_atomic64_dec_if_positive(v);
 }
 
-
 static __always_inline long
 atomic_long_read(const atomic_long_t *v)
 {
@@ -2063,7 +2063,7 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 	return arch_atomic_long_dec_if_positive(v);
 }
 
-#define xchg(ptr, ...)							\
+#define xchg(ptr, ...) \
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
 	kssb_flush(); \
@@ -2099,7 +2099,7 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 #define cmpxchg(ptr, ...) \
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
-	kssb_flush();\
+	kssb_flush(); \
 	kcsan_mb(); \
 	instrument_atomic_write(__ai_ptr, sizeof(*__ai_ptr)); \
 	arch_cmpxchg(__ai_ptr, __VA_ARGS__); \
@@ -2108,7 +2108,7 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 #define cmpxchg_acquire(ptr, ...) \
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
-	kssb_flush_acquire();\
+	kssb_flush_acquire(); \
 	instrument_atomic_write(__ai_ptr, sizeof(*__ai_ptr)); \
 	arch_cmpxchg_acquire(__ai_ptr, __VA_ARGS__); \
 })
@@ -2207,6 +2207,7 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
 	typeof(oldp) __ai_oldp = (oldp); \
+	kssb_flush(); \
 	kcsan_mb(); \
 	instrument_atomic_write(__ai_ptr, sizeof(*__ai_ptr)); \
 	instrument_atomic_write(__ai_oldp, sizeof(*__ai_oldp)); \
@@ -2217,6 +2218,7 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
 	typeof(oldp) __ai_oldp = (oldp); \
+	kssb_flush_acquire(); \
 	instrument_atomic_write(__ai_ptr, sizeof(*__ai_ptr)); \
 	instrument_atomic_write(__ai_oldp, sizeof(*__ai_oldp)); \
 	arch_try_cmpxchg64_acquire(__ai_ptr, __ai_oldp, __VA_ARGS__); \
@@ -2226,6 +2228,7 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
 	typeof(oldp) __ai_oldp = (oldp); \
+	kssb_flush_release(); \
 	kcsan_release(); \
 	instrument_atomic_write(__ai_ptr, sizeof(*__ai_ptr)); \
 	instrument_atomic_write(__ai_oldp, sizeof(*__ai_oldp)); \
@@ -2244,7 +2247,6 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 #define cmpxchg_local(ptr, ...) \
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
-	kssb_flush(); \
 	instrument_atomic_write(__ai_ptr, sizeof(*__ai_ptr)); \
 	arch_cmpxchg_local(__ai_ptr, __VA_ARGS__); \
 })
@@ -2252,7 +2254,6 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 #define cmpxchg64_local(ptr, ...) \
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
-	kssb_flush(); \
 	instrument_atomic_write(__ai_ptr, sizeof(*__ai_ptr)); \
 	arch_cmpxchg64_local(__ai_ptr, __VA_ARGS__); \
 })
@@ -2279,10 +2280,9 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 #define cmpxchg_double_local(ptr, ...) \
 ({ \
 	typeof(ptr) __ai_ptr = (ptr); \
-	kssb_flush(); \
 	instrument_atomic_write(__ai_ptr, 2 * sizeof(*__ai_ptr)); \
 	arch_cmpxchg_double_local(__ai_ptr, __VA_ARGS__); \
 })
 
 #endif /* _LINUX_ATOMIC_INSTRUMENTED_H */
-// 764f741eb77a7ad565dc8d99ce2837d5542e8aee
+// 2195e292503baf0c1e919b87a8f7262b0880616d

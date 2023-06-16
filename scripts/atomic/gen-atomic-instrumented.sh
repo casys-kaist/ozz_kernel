@@ -37,9 +37,13 @@ gen_params_checks()
 	local order="$1"; shift
 
 	if [ "${order}" = "_release" ]; then
+		printf "\tkssb_flush_release();\n"
 		printf "\tkcsan_release();\n"
+	elif [ "${order}" = "_acquire" ]; then
+		printf "\tkssb_flush_acquire();\n"
 	elif [ -z "${order}" ] && ! meta_in "$meta" "slv"; then
 		# RMW with return value is fully ordered
+		printf "\tkssb_flush();\n"
 		printf "\tkcsan_mb();\n"
 	fi
 
@@ -94,6 +98,15 @@ gen_xchg()
 		esac
 	fi
 
+	kssb_flush=""
+	if [ "${xchg%_local}" = "${xchg}" ]; then
+		case "$order" in
+		_release)	kssb_flush="kssb_flush_release()" ;;
+		_acquire)	kssb_flush="kssb_flush_acquire()" ;;
+		"")			kssb_flush="kssb_flush()" ;;
+		esac
+	fi
+
 	if [ "${xchg%${xchg#try_cmpxchg}}" = "try_cmpxchg" ] ; then
 
 cat <<EOF
@@ -102,6 +115,7 @@ cat <<EOF
 	typeof(ptr) __ai_ptr = (ptr); \\
 	typeof(oldp) __ai_oldp = (oldp); \\
 EOF
+[ -n "$kssb_flush" ] && printf "\t${kssb_flush}; \\\\\n"
 [ -n "$kcsan_barrier" ] && printf "\t${kcsan_barrier}; \\\\\n"
 cat <<EOF
 	instrument_atomic_write(__ai_ptr, ${mult}sizeof(*__ai_ptr)); \\
@@ -117,6 +131,7 @@ cat <<EOF
 ({ \\
 	typeof(ptr) __ai_ptr = (ptr); \\
 EOF
+[ -n "$kssb_flush" ] && printf "\t${kssb_flush}; \\\\\n"
 [ -n "$kcsan_barrier" ] && printf "\t${kcsan_barrier}; \\\\\n"
 cat <<EOF
 	instrument_atomic_write(__ai_ptr, ${mult}sizeof(*__ai_ptr)); \\
@@ -150,6 +165,20 @@ cat << EOF
 #include <linux/build_bug.h>
 #include <linux/compiler.h>
 #include <linux/instrumented.h>
+
+// As atomic operations flush the store buffer because we instrument
+// them, we need to avoid flushing the store buffer in emulating the
+// store buffer. For those files, define NO_INSTRUMENT_ATOMIC.
+#if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
+// XXX: We don't want to emulate TSO, so use PSO here
+extern void __ssb_pso_flush(char *);
+#define kssb_flush() __ssb_pso_flush(NULL)
+#else
+#define kssb_flush() do {} while(0)
+#endif
+
+#define kssb_flush_release() kssb_flush()
+#define kssb_flush_acquire() do {} while(0)
 
 EOF
 
