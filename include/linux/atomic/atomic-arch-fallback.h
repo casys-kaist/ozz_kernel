@@ -8,10 +8,20 @@
 
 #include <linux/compiler.h>
 
+#if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
+extern void __ssb_pso_flush(char *);
+#define kssb_flush() __ssb_pso_flush(NULL)
+#else
+#define kssb_flush() do {} while(0)
+#endif
+
 #ifndef arch_xchg_relaxed
-#define arch_xchg_acquire arch_xchg
+#ifndef arch_xchg_no_kssb_flush
+#define arch_xchg_no_kssb_flush arch_xchg
+#endif
+#define arch_xchg_acquire arch_xchg_no_kssb_flush
 #define arch_xchg_release arch_xchg
-#define arch_xchg_relaxed arch_xchg
+#define arch_xchg_relaxed arch_xchg_no_kssb_flush
 #else /* arch_xchg_relaxed */
 
 #ifndef arch_xchg_acquire
@@ -32,9 +42,12 @@
 #endif /* arch_xchg_relaxed */
 
 #ifndef arch_cmpxchg_relaxed
-#define arch_cmpxchg_acquire arch_cmpxchg
+#ifndef arch_cmpxchg_no_kssb_flush
+#define arch_cmpxchg_no_kssb_flush arch_cmpxchg
+#endif
+#define arch_cmpxchg_acquire arch_cmpxchg_no_kssb_flush
 #define arch_cmpxchg_release arch_cmpxchg
-#define arch_cmpxchg_relaxed arch_cmpxchg
+#define arch_cmpxchg_relaxed arch_cmpxchg_no_kssb_flush
 #else /* arch_cmpxchg_relaxed */
 
 #ifndef arch_cmpxchg_acquire
@@ -55,9 +68,12 @@
 #endif /* arch_cmpxchg_relaxed */
 
 #ifndef arch_cmpxchg64_relaxed
-#define arch_cmpxchg64_acquire arch_cmpxchg64
+#ifndef arch_cmpxchg64_no_kssb_flush
+#define arch_cmpxchg64_no_kssb_flush arch_cmpxchg64
+#endif
+#define arch_cmpxchg64_acquire arch_cmpxchg64_no_kssb_flush
 #define arch_cmpxchg64_release arch_cmpxchg64
-#define arch_cmpxchg64_relaxed arch_cmpxchg64
+#define arch_cmpxchg64_relaxed arch_cmpxchg64_no_kssb_flush
 #else /* arch_cmpxchg64_relaxed */
 
 #ifndef arch_cmpxchg64_acquire
@@ -79,9 +95,12 @@
 
 #ifndef arch_try_cmpxchg_relaxed
 #ifdef arch_try_cmpxchg
-#define arch_try_cmpxchg_acquire arch_try_cmpxchg
+#ifndef arch_try_cmpxchg_no_kssb_flush
+#define arch_try_cmpxchg_no_kssb_flush arch_try_cmpxchg
+#endif
+#define arch_try_cmpxchg_acquire arch_try_cmpxchg_no_kssb_flush
 #define arch_try_cmpxchg_release arch_try_cmpxchg
-#define arch_try_cmpxchg_relaxed arch_try_cmpxchg
+#define arch_try_cmpxchg_relaxed arch_try_cmpxchg_no_kssb_flush
 #endif /* arch_try_cmpxchg */
 
 #ifndef arch_try_cmpxchg
@@ -149,9 +168,12 @@
 
 #ifndef arch_try_cmpxchg64_relaxed
 #ifdef arch_try_cmpxchg64
-#define arch_try_cmpxchg64_acquire arch_try_cmpxchg64
+#ifndef arch_try_cmpxchg64_no_kssb_flush
+#define arch_try_cmpxchg64_no_kssb_flush arch_try_cmpxchg64
+#endif
+#define arch_try_cmpxchg64_acquire arch_try_cmpxchg64_no_kssb_flush
 #define arch_try_cmpxchg64_release arch_try_cmpxchg64
-#define arch_try_cmpxchg64_relaxed arch_try_cmpxchg64
+#define arch_try_cmpxchg64_relaxed arch_try_cmpxchg64_no_kssb_flush
 #endif /* arch_try_cmpxchg64 */
 
 #ifndef arch_try_cmpxchg64
@@ -250,9 +272,12 @@ arch_atomic_set_release(atomic_t *v, int i)
 #endif
 
 #ifndef arch_atomic_add_return_relaxed
-#define arch_atomic_add_return_acquire arch_atomic_add_return
+#ifndef arch_atomic_add_return_no_kssb_flush
+#define arch_atomic_add_return_no_kssb_flush arch_atomic_add_return
+#endif
+#define arch_atomic_add_return_acquire arch_atomic_add_return_no_kssb_flush
 #define arch_atomic_add_return_release arch_atomic_add_return
-#define arch_atomic_add_return_relaxed arch_atomic_add_return
+#define arch_atomic_add_return_relaxed arch_atomic_add_return_no_kssb_flush
 #else /* arch_atomic_add_return_relaxed */
 
 #ifndef arch_atomic_add_return_acquire
@@ -270,6 +295,7 @@ arch_atomic_add_return_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_add_return_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_add_return_relaxed(i, v);
 }
@@ -281,6 +307,7 @@ static __always_inline int
 arch_atomic_add_return(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_add_return_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -292,9 +319,12 @@ arch_atomic_add_return(int i, atomic_t *v)
 #endif /* arch_atomic_add_return_relaxed */
 
 #ifndef arch_atomic_fetch_add_relaxed
-#define arch_atomic_fetch_add_acquire arch_atomic_fetch_add
+#ifndef arch_atomic_fetch_add_no_kssb_flush
+#define arch_atomic_fetch_add_no_kssb_flush arch_atomic_fetch_add
+#endif
+#define arch_atomic_fetch_add_acquire arch_atomic_fetch_add_no_kssb_flush
 #define arch_atomic_fetch_add_release arch_atomic_fetch_add
-#define arch_atomic_fetch_add_relaxed arch_atomic_fetch_add
+#define arch_atomic_fetch_add_relaxed arch_atomic_fetch_add_no_kssb_flush
 #else /* arch_atomic_fetch_add_relaxed */
 
 #ifndef arch_atomic_fetch_add_acquire
@@ -312,6 +342,7 @@ arch_atomic_fetch_add_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_add_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_add_relaxed(i, v);
 }
@@ -323,6 +354,7 @@ static __always_inline int
 arch_atomic_fetch_add(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_add_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -334,9 +366,12 @@ arch_atomic_fetch_add(int i, atomic_t *v)
 #endif /* arch_atomic_fetch_add_relaxed */
 
 #ifndef arch_atomic_sub_return_relaxed
-#define arch_atomic_sub_return_acquire arch_atomic_sub_return
+#ifndef arch_atomic_sub_return_no_kssb_flush
+#define arch_atomic_sub_return_no_kssb_flush arch_atomic_sub_return
+#endif
+#define arch_atomic_sub_return_acquire arch_atomic_sub_return_no_kssb_flush
 #define arch_atomic_sub_return_release arch_atomic_sub_return
-#define arch_atomic_sub_return_relaxed arch_atomic_sub_return
+#define arch_atomic_sub_return_relaxed arch_atomic_sub_return_no_kssb_flush
 #else /* arch_atomic_sub_return_relaxed */
 
 #ifndef arch_atomic_sub_return_acquire
@@ -354,6 +389,7 @@ arch_atomic_sub_return_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_sub_return_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_sub_return_relaxed(i, v);
 }
@@ -365,6 +401,7 @@ static __always_inline int
 arch_atomic_sub_return(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_sub_return_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -376,9 +413,12 @@ arch_atomic_sub_return(int i, atomic_t *v)
 #endif /* arch_atomic_sub_return_relaxed */
 
 #ifndef arch_atomic_fetch_sub_relaxed
-#define arch_atomic_fetch_sub_acquire arch_atomic_fetch_sub
+#ifndef arch_atomic_fetch_sub_no_kssb_flush
+#define arch_atomic_fetch_sub_no_kssb_flush arch_atomic_fetch_sub
+#endif
+#define arch_atomic_fetch_sub_acquire arch_atomic_fetch_sub_no_kssb_flush
 #define arch_atomic_fetch_sub_release arch_atomic_fetch_sub
-#define arch_atomic_fetch_sub_relaxed arch_atomic_fetch_sub
+#define arch_atomic_fetch_sub_relaxed arch_atomic_fetch_sub_no_kssb_flush
 #else /* arch_atomic_fetch_sub_relaxed */
 
 #ifndef arch_atomic_fetch_sub_acquire
@@ -396,6 +436,7 @@ arch_atomic_fetch_sub_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_sub_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_sub_relaxed(i, v);
 }
@@ -407,6 +448,7 @@ static __always_inline int
 arch_atomic_fetch_sub(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_sub_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -428,9 +470,12 @@ arch_atomic_inc(atomic_t *v)
 
 #ifndef arch_atomic_inc_return_relaxed
 #ifdef arch_atomic_inc_return
-#define arch_atomic_inc_return_acquire arch_atomic_inc_return
+#ifndef arch_atomic_inc_return_no_kssb_flush
+#define arch_atomic_inc_return_no_kssb_flush arch_atomic_inc_return
+#endif
+#define arch_atomic_inc_return_acquire arch_atomic_inc_return_no_kssb_flush
 #define arch_atomic_inc_return_release arch_atomic_inc_return
-#define arch_atomic_inc_return_relaxed arch_atomic_inc_return
+#define arch_atomic_inc_return_relaxed arch_atomic_inc_return_no_kssb_flush
 #endif /* arch_atomic_inc_return */
 
 #ifndef arch_atomic_inc_return
@@ -486,6 +531,7 @@ arch_atomic_inc_return_acquire(atomic_t *v)
 static __always_inline int
 arch_atomic_inc_return_release(atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_inc_return_relaxed(v);
 }
@@ -497,6 +543,7 @@ static __always_inline int
 arch_atomic_inc_return(atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_inc_return_relaxed(v);
 	__atomic_post_full_fence();
@@ -509,9 +556,12 @@ arch_atomic_inc_return(atomic_t *v)
 
 #ifndef arch_atomic_fetch_inc_relaxed
 #ifdef arch_atomic_fetch_inc
-#define arch_atomic_fetch_inc_acquire arch_atomic_fetch_inc
+#ifndef arch_atomic_fetch_inc_no_kssb_flush
+#define arch_atomic_fetch_inc_no_kssb_flush arch_atomic_fetch_inc
+#endif
+#define arch_atomic_fetch_inc_acquire arch_atomic_fetch_inc_no_kssb_flush
 #define arch_atomic_fetch_inc_release arch_atomic_fetch_inc
-#define arch_atomic_fetch_inc_relaxed arch_atomic_fetch_inc
+#define arch_atomic_fetch_inc_relaxed arch_atomic_fetch_inc_no_kssb_flush
 #endif /* arch_atomic_fetch_inc */
 
 #ifndef arch_atomic_fetch_inc
@@ -567,6 +617,7 @@ arch_atomic_fetch_inc_acquire(atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_inc_release(atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_inc_relaxed(v);
 }
@@ -578,6 +629,7 @@ static __always_inline int
 arch_atomic_fetch_inc(atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_inc_relaxed(v);
 	__atomic_post_full_fence();
@@ -599,9 +651,12 @@ arch_atomic_dec(atomic_t *v)
 
 #ifndef arch_atomic_dec_return_relaxed
 #ifdef arch_atomic_dec_return
-#define arch_atomic_dec_return_acquire arch_atomic_dec_return
+#ifndef arch_atomic_dec_return_no_kssb_flush
+#define arch_atomic_dec_return_no_kssb_flush arch_atomic_dec_return
+#endif
+#define arch_atomic_dec_return_acquire arch_atomic_dec_return_no_kssb_flush
 #define arch_atomic_dec_return_release arch_atomic_dec_return
-#define arch_atomic_dec_return_relaxed arch_atomic_dec_return
+#define arch_atomic_dec_return_relaxed arch_atomic_dec_return_no_kssb_flush
 #endif /* arch_atomic_dec_return */
 
 #ifndef arch_atomic_dec_return
@@ -657,6 +712,7 @@ arch_atomic_dec_return_acquire(atomic_t *v)
 static __always_inline int
 arch_atomic_dec_return_release(atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_dec_return_relaxed(v);
 }
@@ -668,6 +724,7 @@ static __always_inline int
 arch_atomic_dec_return(atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_dec_return_relaxed(v);
 	__atomic_post_full_fence();
@@ -680,9 +737,12 @@ arch_atomic_dec_return(atomic_t *v)
 
 #ifndef arch_atomic_fetch_dec_relaxed
 #ifdef arch_atomic_fetch_dec
-#define arch_atomic_fetch_dec_acquire arch_atomic_fetch_dec
+#ifndef arch_atomic_fetch_dec_no_kssb_flush
+#define arch_atomic_fetch_dec_no_kssb_flush arch_atomic_fetch_dec
+#endif
+#define arch_atomic_fetch_dec_acquire arch_atomic_fetch_dec_no_kssb_flush
 #define arch_atomic_fetch_dec_release arch_atomic_fetch_dec
-#define arch_atomic_fetch_dec_relaxed arch_atomic_fetch_dec
+#define arch_atomic_fetch_dec_relaxed arch_atomic_fetch_dec_no_kssb_flush
 #endif /* arch_atomic_fetch_dec */
 
 #ifndef arch_atomic_fetch_dec
@@ -738,6 +798,7 @@ arch_atomic_fetch_dec_acquire(atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_dec_release(atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_dec_relaxed(v);
 }
@@ -749,6 +810,7 @@ static __always_inline int
 arch_atomic_fetch_dec(atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_dec_relaxed(v);
 	__atomic_post_full_fence();
@@ -760,9 +822,12 @@ arch_atomic_fetch_dec(atomic_t *v)
 #endif /* arch_atomic_fetch_dec_relaxed */
 
 #ifndef arch_atomic_fetch_and_relaxed
-#define arch_atomic_fetch_and_acquire arch_atomic_fetch_and
+#ifndef arch_atomic_fetch_and_no_kssb_flush
+#define arch_atomic_fetch_and_no_kssb_flush arch_atomic_fetch_and
+#endif
+#define arch_atomic_fetch_and_acquire arch_atomic_fetch_and_no_kssb_flush
 #define arch_atomic_fetch_and_release arch_atomic_fetch_and
-#define arch_atomic_fetch_and_relaxed arch_atomic_fetch_and
+#define arch_atomic_fetch_and_relaxed arch_atomic_fetch_and_no_kssb_flush
 #else /* arch_atomic_fetch_and_relaxed */
 
 #ifndef arch_atomic_fetch_and_acquire
@@ -780,6 +845,7 @@ arch_atomic_fetch_and_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_and_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_and_relaxed(i, v);
 }
@@ -791,6 +857,7 @@ static __always_inline int
 arch_atomic_fetch_and(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_and_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -812,9 +879,12 @@ arch_atomic_andnot(int i, atomic_t *v)
 
 #ifndef arch_atomic_fetch_andnot_relaxed
 #ifdef arch_atomic_fetch_andnot
-#define arch_atomic_fetch_andnot_acquire arch_atomic_fetch_andnot
+#ifndef arch_atomic_fetch_andnot_no_kssb_flush
+#define arch_atomic_fetch_andnot_no_kssb_flush arch_atomic_fetch_andnot
+#endif
+#define arch_atomic_fetch_andnot_acquire arch_atomic_fetch_andnot_no_kssb_flush
 #define arch_atomic_fetch_andnot_release arch_atomic_fetch_andnot
-#define arch_atomic_fetch_andnot_relaxed arch_atomic_fetch_andnot
+#define arch_atomic_fetch_andnot_relaxed arch_atomic_fetch_andnot_no_kssb_flush
 #endif /* arch_atomic_fetch_andnot */
 
 #ifndef arch_atomic_fetch_andnot
@@ -870,6 +940,7 @@ arch_atomic_fetch_andnot_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_andnot_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_andnot_relaxed(i, v);
 }
@@ -881,6 +952,7 @@ static __always_inline int
 arch_atomic_fetch_andnot(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_andnot_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -892,9 +964,12 @@ arch_atomic_fetch_andnot(int i, atomic_t *v)
 #endif /* arch_atomic_fetch_andnot_relaxed */
 
 #ifndef arch_atomic_fetch_or_relaxed
-#define arch_atomic_fetch_or_acquire arch_atomic_fetch_or
+#ifndef arch_atomic_fetch_or_no_kssb_flush
+#define arch_atomic_fetch_or_no_kssb_flush arch_atomic_fetch_or
+#endif
+#define arch_atomic_fetch_or_acquire arch_atomic_fetch_or_no_kssb_flush
 #define arch_atomic_fetch_or_release arch_atomic_fetch_or
-#define arch_atomic_fetch_or_relaxed arch_atomic_fetch_or
+#define arch_atomic_fetch_or_relaxed arch_atomic_fetch_or_no_kssb_flush
 #else /* arch_atomic_fetch_or_relaxed */
 
 #ifndef arch_atomic_fetch_or_acquire
@@ -912,6 +987,7 @@ arch_atomic_fetch_or_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_or_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_or_relaxed(i, v);
 }
@@ -923,6 +999,7 @@ static __always_inline int
 arch_atomic_fetch_or(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_or_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -934,9 +1011,12 @@ arch_atomic_fetch_or(int i, atomic_t *v)
 #endif /* arch_atomic_fetch_or_relaxed */
 
 #ifndef arch_atomic_fetch_xor_relaxed
-#define arch_atomic_fetch_xor_acquire arch_atomic_fetch_xor
+#ifndef arch_atomic_fetch_xor_no_kssb_flush
+#define arch_atomic_fetch_xor_no_kssb_flush arch_atomic_fetch_xor
+#endif
+#define arch_atomic_fetch_xor_acquire arch_atomic_fetch_xor_no_kssb_flush
 #define arch_atomic_fetch_xor_release arch_atomic_fetch_xor
-#define arch_atomic_fetch_xor_relaxed arch_atomic_fetch_xor
+#define arch_atomic_fetch_xor_relaxed arch_atomic_fetch_xor_no_kssb_flush
 #else /* arch_atomic_fetch_xor_relaxed */
 
 #ifndef arch_atomic_fetch_xor_acquire
@@ -954,6 +1034,7 @@ arch_atomic_fetch_xor_acquire(int i, atomic_t *v)
 static __always_inline int
 arch_atomic_fetch_xor_release(int i, atomic_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_xor_relaxed(i, v);
 }
@@ -965,6 +1046,7 @@ static __always_inline int
 arch_atomic_fetch_xor(int i, atomic_t *v)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_xor_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -976,9 +1058,12 @@ arch_atomic_fetch_xor(int i, atomic_t *v)
 #endif /* arch_atomic_fetch_xor_relaxed */
 
 #ifndef arch_atomic_xchg_relaxed
-#define arch_atomic_xchg_acquire arch_atomic_xchg
+#ifndef arch_atomic_xchg_no_kssb_flush
+#define arch_atomic_xchg_no_kssb_flush arch_atomic_xchg
+#endif
+#define arch_atomic_xchg_acquire arch_atomic_xchg_no_kssb_flush
 #define arch_atomic_xchg_release arch_atomic_xchg
-#define arch_atomic_xchg_relaxed arch_atomic_xchg
+#define arch_atomic_xchg_relaxed arch_atomic_xchg_no_kssb_flush
 #else /* arch_atomic_xchg_relaxed */
 
 #ifndef arch_atomic_xchg_acquire
@@ -996,6 +1081,7 @@ arch_atomic_xchg_acquire(atomic_t *v, int i)
 static __always_inline int
 arch_atomic_xchg_release(atomic_t *v, int i)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_xchg_relaxed(v, i);
 }
@@ -1007,6 +1093,7 @@ static __always_inline int
 arch_atomic_xchg(atomic_t *v, int i)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_xchg_relaxed(v, i);
 	__atomic_post_full_fence();
@@ -1018,9 +1105,12 @@ arch_atomic_xchg(atomic_t *v, int i)
 #endif /* arch_atomic_xchg_relaxed */
 
 #ifndef arch_atomic_cmpxchg_relaxed
-#define arch_atomic_cmpxchg_acquire arch_atomic_cmpxchg
+#ifndef arch_atomic_cmpxchg_no_kssb_flush
+#define arch_atomic_cmpxchg_no_kssb_flush arch_atomic_cmpxchg
+#endif
+#define arch_atomic_cmpxchg_acquire arch_atomic_cmpxchg_no_kssb_flush
 #define arch_atomic_cmpxchg_release arch_atomic_cmpxchg
-#define arch_atomic_cmpxchg_relaxed arch_atomic_cmpxchg
+#define arch_atomic_cmpxchg_relaxed arch_atomic_cmpxchg_no_kssb_flush
 #else /* arch_atomic_cmpxchg_relaxed */
 
 #ifndef arch_atomic_cmpxchg_acquire
@@ -1038,6 +1128,7 @@ arch_atomic_cmpxchg_acquire(atomic_t *v, int old, int new)
 static __always_inline int
 arch_atomic_cmpxchg_release(atomic_t *v, int old, int new)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_cmpxchg_relaxed(v, old, new);
 }
@@ -1049,6 +1140,7 @@ static __always_inline int
 arch_atomic_cmpxchg(atomic_t *v, int old, int new)
 {
 	int ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
@@ -1061,9 +1153,12 @@ arch_atomic_cmpxchg(atomic_t *v, int old, int new)
 
 #ifndef arch_atomic_try_cmpxchg_relaxed
 #ifdef arch_atomic_try_cmpxchg
-#define arch_atomic_try_cmpxchg_acquire arch_atomic_try_cmpxchg
+#ifndef arch_atomic_try_cmpxchg_no_kssb_flush
+#define arch_atomic_try_cmpxchg_no_kssb_flush arch_atomic_try_cmpxchg
+#endif
+#define arch_atomic_try_cmpxchg_acquire arch_atomic_try_cmpxchg_no_kssb_flush
 #define arch_atomic_try_cmpxchg_release arch_atomic_try_cmpxchg
-#define arch_atomic_try_cmpxchg_relaxed arch_atomic_try_cmpxchg
+#define arch_atomic_try_cmpxchg_relaxed arch_atomic_try_cmpxchg_no_kssb_flush
 #endif /* arch_atomic_try_cmpxchg */
 
 #ifndef arch_atomic_try_cmpxchg
@@ -1135,6 +1230,7 @@ arch_atomic_try_cmpxchg_acquire(atomic_t *v, int *old, int new)
 static __always_inline bool
 arch_atomic_try_cmpxchg_release(atomic_t *v, int *old, int new)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_try_cmpxchg_relaxed(v, old, new);
 }
@@ -1146,6 +1242,7 @@ static __always_inline bool
 arch_atomic_try_cmpxchg(atomic_t *v, int *old, int new)
 {
 	bool ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic_try_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
@@ -1371,9 +1468,12 @@ arch_atomic64_set_release(atomic64_t *v, s64 i)
 #endif
 
 #ifndef arch_atomic64_add_return_relaxed
-#define arch_atomic64_add_return_acquire arch_atomic64_add_return
+#ifndef arch_atomic64_add_return_no_kssb_flush
+#define arch_atomic64_add_return_no_kssb_flush arch_atomic64_add_return
+#endif
+#define arch_atomic64_add_return_acquire arch_atomic64_add_return_no_kssb_flush
 #define arch_atomic64_add_return_release arch_atomic64_add_return
-#define arch_atomic64_add_return_relaxed arch_atomic64_add_return
+#define arch_atomic64_add_return_relaxed arch_atomic64_add_return_no_kssb_flush
 #else /* arch_atomic64_add_return_relaxed */
 
 #ifndef arch_atomic64_add_return_acquire
@@ -1391,6 +1491,7 @@ arch_atomic64_add_return_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_add_return_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_add_return_relaxed(i, v);
 }
@@ -1402,6 +1503,7 @@ static __always_inline s64
 arch_atomic64_add_return(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_add_return_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -1413,9 +1515,12 @@ arch_atomic64_add_return(s64 i, atomic64_t *v)
 #endif /* arch_atomic64_add_return_relaxed */
 
 #ifndef arch_atomic64_fetch_add_relaxed
-#define arch_atomic64_fetch_add_acquire arch_atomic64_fetch_add
+#ifndef arch_atomic64_fetch_add_no_kssb_flush
+#define arch_atomic64_fetch_add_no_kssb_flush arch_atomic64_fetch_add
+#endif
+#define arch_atomic64_fetch_add_acquire arch_atomic64_fetch_add_no_kssb_flush
 #define arch_atomic64_fetch_add_release arch_atomic64_fetch_add
-#define arch_atomic64_fetch_add_relaxed arch_atomic64_fetch_add
+#define arch_atomic64_fetch_add_relaxed arch_atomic64_fetch_add_no_kssb_flush
 #else /* arch_atomic64_fetch_add_relaxed */
 
 #ifndef arch_atomic64_fetch_add_acquire
@@ -1433,6 +1538,7 @@ arch_atomic64_fetch_add_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_add_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_add_relaxed(i, v);
 }
@@ -1444,6 +1550,7 @@ static __always_inline s64
 arch_atomic64_fetch_add(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_add_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -1455,9 +1562,12 @@ arch_atomic64_fetch_add(s64 i, atomic64_t *v)
 #endif /* arch_atomic64_fetch_add_relaxed */
 
 #ifndef arch_atomic64_sub_return_relaxed
-#define arch_atomic64_sub_return_acquire arch_atomic64_sub_return
+#ifndef arch_atomic64_sub_return_no_kssb_flush
+#define arch_atomic64_sub_return_no_kssb_flush arch_atomic64_sub_return
+#endif
+#define arch_atomic64_sub_return_acquire arch_atomic64_sub_return_no_kssb_flush
 #define arch_atomic64_sub_return_release arch_atomic64_sub_return
-#define arch_atomic64_sub_return_relaxed arch_atomic64_sub_return
+#define arch_atomic64_sub_return_relaxed arch_atomic64_sub_return_no_kssb_flush
 #else /* arch_atomic64_sub_return_relaxed */
 
 #ifndef arch_atomic64_sub_return_acquire
@@ -1475,6 +1585,7 @@ arch_atomic64_sub_return_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_sub_return_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_sub_return_relaxed(i, v);
 }
@@ -1486,6 +1597,7 @@ static __always_inline s64
 arch_atomic64_sub_return(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_sub_return_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -1497,9 +1609,12 @@ arch_atomic64_sub_return(s64 i, atomic64_t *v)
 #endif /* arch_atomic64_sub_return_relaxed */
 
 #ifndef arch_atomic64_fetch_sub_relaxed
-#define arch_atomic64_fetch_sub_acquire arch_atomic64_fetch_sub
+#ifndef arch_atomic64_fetch_sub_no_kssb_flush
+#define arch_atomic64_fetch_sub_no_kssb_flush arch_atomic64_fetch_sub
+#endif
+#define arch_atomic64_fetch_sub_acquire arch_atomic64_fetch_sub_no_kssb_flush
 #define arch_atomic64_fetch_sub_release arch_atomic64_fetch_sub
-#define arch_atomic64_fetch_sub_relaxed arch_atomic64_fetch_sub
+#define arch_atomic64_fetch_sub_relaxed arch_atomic64_fetch_sub_no_kssb_flush
 #else /* arch_atomic64_fetch_sub_relaxed */
 
 #ifndef arch_atomic64_fetch_sub_acquire
@@ -1517,6 +1632,7 @@ arch_atomic64_fetch_sub_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_sub_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_sub_relaxed(i, v);
 }
@@ -1528,6 +1644,7 @@ static __always_inline s64
 arch_atomic64_fetch_sub(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_sub_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -1549,9 +1666,12 @@ arch_atomic64_inc(atomic64_t *v)
 
 #ifndef arch_atomic64_inc_return_relaxed
 #ifdef arch_atomic64_inc_return
-#define arch_atomic64_inc_return_acquire arch_atomic64_inc_return
+#ifndef arch_atomic64_inc_return_no_kssb_flush
+#define arch_atomic64_inc_return_no_kssb_flush arch_atomic64_inc_return
+#endif
+#define arch_atomic64_inc_return_acquire arch_atomic64_inc_return_no_kssb_flush
 #define arch_atomic64_inc_return_release arch_atomic64_inc_return
-#define arch_atomic64_inc_return_relaxed arch_atomic64_inc_return
+#define arch_atomic64_inc_return_relaxed arch_atomic64_inc_return_no_kssb_flush
 #endif /* arch_atomic64_inc_return */
 
 #ifndef arch_atomic64_inc_return
@@ -1607,6 +1727,7 @@ arch_atomic64_inc_return_acquire(atomic64_t *v)
 static __always_inline s64
 arch_atomic64_inc_return_release(atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_inc_return_relaxed(v);
 }
@@ -1618,6 +1739,7 @@ static __always_inline s64
 arch_atomic64_inc_return(atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_inc_return_relaxed(v);
 	__atomic_post_full_fence();
@@ -1630,9 +1752,12 @@ arch_atomic64_inc_return(atomic64_t *v)
 
 #ifndef arch_atomic64_fetch_inc_relaxed
 #ifdef arch_atomic64_fetch_inc
-#define arch_atomic64_fetch_inc_acquire arch_atomic64_fetch_inc
+#ifndef arch_atomic64_fetch_inc_no_kssb_flush
+#define arch_atomic64_fetch_inc_no_kssb_flush arch_atomic64_fetch_inc
+#endif
+#define arch_atomic64_fetch_inc_acquire arch_atomic64_fetch_inc_no_kssb_flush
 #define arch_atomic64_fetch_inc_release arch_atomic64_fetch_inc
-#define arch_atomic64_fetch_inc_relaxed arch_atomic64_fetch_inc
+#define arch_atomic64_fetch_inc_relaxed arch_atomic64_fetch_inc_no_kssb_flush
 #endif /* arch_atomic64_fetch_inc */
 
 #ifndef arch_atomic64_fetch_inc
@@ -1688,6 +1813,7 @@ arch_atomic64_fetch_inc_acquire(atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_inc_release(atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_inc_relaxed(v);
 }
@@ -1699,6 +1825,7 @@ static __always_inline s64
 arch_atomic64_fetch_inc(atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_inc_relaxed(v);
 	__atomic_post_full_fence();
@@ -1720,9 +1847,12 @@ arch_atomic64_dec(atomic64_t *v)
 
 #ifndef arch_atomic64_dec_return_relaxed
 #ifdef arch_atomic64_dec_return
-#define arch_atomic64_dec_return_acquire arch_atomic64_dec_return
+#ifndef arch_atomic64_dec_return_no_kssb_flush
+#define arch_atomic64_dec_return_no_kssb_flush arch_atomic64_dec_return
+#endif
+#define arch_atomic64_dec_return_acquire arch_atomic64_dec_return_no_kssb_flush
 #define arch_atomic64_dec_return_release arch_atomic64_dec_return
-#define arch_atomic64_dec_return_relaxed arch_atomic64_dec_return
+#define arch_atomic64_dec_return_relaxed arch_atomic64_dec_return_no_kssb_flush
 #endif /* arch_atomic64_dec_return */
 
 #ifndef arch_atomic64_dec_return
@@ -1778,6 +1908,7 @@ arch_atomic64_dec_return_acquire(atomic64_t *v)
 static __always_inline s64
 arch_atomic64_dec_return_release(atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_dec_return_relaxed(v);
 }
@@ -1789,6 +1920,7 @@ static __always_inline s64
 arch_atomic64_dec_return(atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_dec_return_relaxed(v);
 	__atomic_post_full_fence();
@@ -1801,9 +1933,12 @@ arch_atomic64_dec_return(atomic64_t *v)
 
 #ifndef arch_atomic64_fetch_dec_relaxed
 #ifdef arch_atomic64_fetch_dec
-#define arch_atomic64_fetch_dec_acquire arch_atomic64_fetch_dec
+#ifndef arch_atomic64_fetch_dec_no_kssb_flush
+#define arch_atomic64_fetch_dec_no_kssb_flush arch_atomic64_fetch_dec
+#endif
+#define arch_atomic64_fetch_dec_acquire arch_atomic64_fetch_dec_no_kssb_flush
 #define arch_atomic64_fetch_dec_release arch_atomic64_fetch_dec
-#define arch_atomic64_fetch_dec_relaxed arch_atomic64_fetch_dec
+#define arch_atomic64_fetch_dec_relaxed arch_atomic64_fetch_dec_no_kssb_flush
 #endif /* arch_atomic64_fetch_dec */
 
 #ifndef arch_atomic64_fetch_dec
@@ -1859,6 +1994,7 @@ arch_atomic64_fetch_dec_acquire(atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_dec_release(atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_dec_relaxed(v);
 }
@@ -1870,6 +2006,7 @@ static __always_inline s64
 arch_atomic64_fetch_dec(atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_dec_relaxed(v);
 	__atomic_post_full_fence();
@@ -1881,9 +2018,12 @@ arch_atomic64_fetch_dec(atomic64_t *v)
 #endif /* arch_atomic64_fetch_dec_relaxed */
 
 #ifndef arch_atomic64_fetch_and_relaxed
-#define arch_atomic64_fetch_and_acquire arch_atomic64_fetch_and
+#ifndef arch_atomic64_fetch_and_no_kssb_flush
+#define arch_atomic64_fetch_and_no_kssb_flush arch_atomic64_fetch_and
+#endif
+#define arch_atomic64_fetch_and_acquire arch_atomic64_fetch_and_no_kssb_flush
 #define arch_atomic64_fetch_and_release arch_atomic64_fetch_and
-#define arch_atomic64_fetch_and_relaxed arch_atomic64_fetch_and
+#define arch_atomic64_fetch_and_relaxed arch_atomic64_fetch_and_no_kssb_flush
 #else /* arch_atomic64_fetch_and_relaxed */
 
 #ifndef arch_atomic64_fetch_and_acquire
@@ -1901,6 +2041,7 @@ arch_atomic64_fetch_and_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_and_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_and_relaxed(i, v);
 }
@@ -1912,6 +2053,7 @@ static __always_inline s64
 arch_atomic64_fetch_and(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_and_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -1933,9 +2075,12 @@ arch_atomic64_andnot(s64 i, atomic64_t *v)
 
 #ifndef arch_atomic64_fetch_andnot_relaxed
 #ifdef arch_atomic64_fetch_andnot
-#define arch_atomic64_fetch_andnot_acquire arch_atomic64_fetch_andnot
+#ifndef arch_atomic64_fetch_andnot_no_kssb_flush
+#define arch_atomic64_fetch_andnot_no_kssb_flush arch_atomic64_fetch_andnot
+#endif
+#define arch_atomic64_fetch_andnot_acquire arch_atomic64_fetch_andnot_no_kssb_flush
 #define arch_atomic64_fetch_andnot_release arch_atomic64_fetch_andnot
-#define arch_atomic64_fetch_andnot_relaxed arch_atomic64_fetch_andnot
+#define arch_atomic64_fetch_andnot_relaxed arch_atomic64_fetch_andnot_no_kssb_flush
 #endif /* arch_atomic64_fetch_andnot */
 
 #ifndef arch_atomic64_fetch_andnot
@@ -1991,6 +2136,7 @@ arch_atomic64_fetch_andnot_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_andnot_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_andnot_relaxed(i, v);
 }
@@ -2002,6 +2148,7 @@ static __always_inline s64
 arch_atomic64_fetch_andnot(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_andnot_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -2013,9 +2160,12 @@ arch_atomic64_fetch_andnot(s64 i, atomic64_t *v)
 #endif /* arch_atomic64_fetch_andnot_relaxed */
 
 #ifndef arch_atomic64_fetch_or_relaxed
-#define arch_atomic64_fetch_or_acquire arch_atomic64_fetch_or
+#ifndef arch_atomic64_fetch_or_no_kssb_flush
+#define arch_atomic64_fetch_or_no_kssb_flush arch_atomic64_fetch_or
+#endif
+#define arch_atomic64_fetch_or_acquire arch_atomic64_fetch_or_no_kssb_flush
 #define arch_atomic64_fetch_or_release arch_atomic64_fetch_or
-#define arch_atomic64_fetch_or_relaxed arch_atomic64_fetch_or
+#define arch_atomic64_fetch_or_relaxed arch_atomic64_fetch_or_no_kssb_flush
 #else /* arch_atomic64_fetch_or_relaxed */
 
 #ifndef arch_atomic64_fetch_or_acquire
@@ -2033,6 +2183,7 @@ arch_atomic64_fetch_or_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_or_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_or_relaxed(i, v);
 }
@@ -2044,6 +2195,7 @@ static __always_inline s64
 arch_atomic64_fetch_or(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_or_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -2055,9 +2207,12 @@ arch_atomic64_fetch_or(s64 i, atomic64_t *v)
 #endif /* arch_atomic64_fetch_or_relaxed */
 
 #ifndef arch_atomic64_fetch_xor_relaxed
-#define arch_atomic64_fetch_xor_acquire arch_atomic64_fetch_xor
+#ifndef arch_atomic64_fetch_xor_no_kssb_flush
+#define arch_atomic64_fetch_xor_no_kssb_flush arch_atomic64_fetch_xor
+#endif
+#define arch_atomic64_fetch_xor_acquire arch_atomic64_fetch_xor_no_kssb_flush
 #define arch_atomic64_fetch_xor_release arch_atomic64_fetch_xor
-#define arch_atomic64_fetch_xor_relaxed arch_atomic64_fetch_xor
+#define arch_atomic64_fetch_xor_relaxed arch_atomic64_fetch_xor_no_kssb_flush
 #else /* arch_atomic64_fetch_xor_relaxed */
 
 #ifndef arch_atomic64_fetch_xor_acquire
@@ -2075,6 +2230,7 @@ arch_atomic64_fetch_xor_acquire(s64 i, atomic64_t *v)
 static __always_inline s64
 arch_atomic64_fetch_xor_release(s64 i, atomic64_t *v)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_xor_relaxed(i, v);
 }
@@ -2086,6 +2242,7 @@ static __always_inline s64
 arch_atomic64_fetch_xor(s64 i, atomic64_t *v)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_xor_relaxed(i, v);
 	__atomic_post_full_fence();
@@ -2097,9 +2254,12 @@ arch_atomic64_fetch_xor(s64 i, atomic64_t *v)
 #endif /* arch_atomic64_fetch_xor_relaxed */
 
 #ifndef arch_atomic64_xchg_relaxed
-#define arch_atomic64_xchg_acquire arch_atomic64_xchg
+#ifndef arch_atomic64_xchg_no_kssb_flush
+#define arch_atomic64_xchg_no_kssb_flush arch_atomic64_xchg
+#endif
+#define arch_atomic64_xchg_acquire arch_atomic64_xchg_no_kssb_flush
 #define arch_atomic64_xchg_release arch_atomic64_xchg
-#define arch_atomic64_xchg_relaxed arch_atomic64_xchg
+#define arch_atomic64_xchg_relaxed arch_atomic64_xchg_no_kssb_flush
 #else /* arch_atomic64_xchg_relaxed */
 
 #ifndef arch_atomic64_xchg_acquire
@@ -2117,6 +2277,7 @@ arch_atomic64_xchg_acquire(atomic64_t *v, s64 i)
 static __always_inline s64
 arch_atomic64_xchg_release(atomic64_t *v, s64 i)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_xchg_relaxed(v, i);
 }
@@ -2128,6 +2289,7 @@ static __always_inline s64
 arch_atomic64_xchg(atomic64_t *v, s64 i)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_xchg_relaxed(v, i);
 	__atomic_post_full_fence();
@@ -2139,9 +2301,12 @@ arch_atomic64_xchg(atomic64_t *v, s64 i)
 #endif /* arch_atomic64_xchg_relaxed */
 
 #ifndef arch_atomic64_cmpxchg_relaxed
-#define arch_atomic64_cmpxchg_acquire arch_atomic64_cmpxchg
+#ifndef arch_atomic64_cmpxchg_no_kssb_flush
+#define arch_atomic64_cmpxchg_no_kssb_flush arch_atomic64_cmpxchg
+#endif
+#define arch_atomic64_cmpxchg_acquire arch_atomic64_cmpxchg_no_kssb_flush
 #define arch_atomic64_cmpxchg_release arch_atomic64_cmpxchg
-#define arch_atomic64_cmpxchg_relaxed arch_atomic64_cmpxchg
+#define arch_atomic64_cmpxchg_relaxed arch_atomic64_cmpxchg_no_kssb_flush
 #else /* arch_atomic64_cmpxchg_relaxed */
 
 #ifndef arch_atomic64_cmpxchg_acquire
@@ -2159,6 +2324,7 @@ arch_atomic64_cmpxchg_acquire(atomic64_t *v, s64 old, s64 new)
 static __always_inline s64
 arch_atomic64_cmpxchg_release(atomic64_t *v, s64 old, s64 new)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_cmpxchg_relaxed(v, old, new);
 }
@@ -2170,6 +2336,7 @@ static __always_inline s64
 arch_atomic64_cmpxchg(atomic64_t *v, s64 old, s64 new)
 {
 	s64 ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
@@ -2182,9 +2349,12 @@ arch_atomic64_cmpxchg(atomic64_t *v, s64 old, s64 new)
 
 #ifndef arch_atomic64_try_cmpxchg_relaxed
 #ifdef arch_atomic64_try_cmpxchg
-#define arch_atomic64_try_cmpxchg_acquire arch_atomic64_try_cmpxchg
+#ifndef arch_atomic64_try_cmpxchg_no_kssb_flush
+#define arch_atomic64_try_cmpxchg_no_kssb_flush arch_atomic64_try_cmpxchg
+#endif
+#define arch_atomic64_try_cmpxchg_acquire arch_atomic64_try_cmpxchg_no_kssb_flush
 #define arch_atomic64_try_cmpxchg_release arch_atomic64_try_cmpxchg
-#define arch_atomic64_try_cmpxchg_relaxed arch_atomic64_try_cmpxchg
+#define arch_atomic64_try_cmpxchg_relaxed arch_atomic64_try_cmpxchg_no_kssb_flush
 #endif /* arch_atomic64_try_cmpxchg */
 
 #ifndef arch_atomic64_try_cmpxchg
@@ -2256,6 +2426,7 @@ arch_atomic64_try_cmpxchg_acquire(atomic64_t *v, s64 *old, s64 new)
 static __always_inline bool
 arch_atomic64_try_cmpxchg_release(atomic64_t *v, s64 *old, s64 new)
 {
+	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_try_cmpxchg_relaxed(v, old, new);
 }
@@ -2267,6 +2438,7 @@ static __always_inline bool
 arch_atomic64_try_cmpxchg(atomic64_t *v, s64 *old, s64 new)
 {
 	bool ret;
+	kssb_flush();
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_try_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
@@ -2456,4 +2628,4 @@ arch_atomic64_dec_if_positive(atomic64_t *v)
 #endif
 
 #endif /* _LINUX_ATOMIC_FALLBACK_H */
-// b5e87bdd5ede61470c29f7a7e4de781af3770f09
+// 74a4fc01a0489bddf557b2981838d5b31a338d31

@@ -50,9 +50,12 @@ gen_basic_fallbacks()
 {
 	local basename="$1"; shift
 cat << EOF
-#define ${basename}_acquire ${basename}
+#ifndef ${basename}_no_kssb_flush
+#define ${basename}_no_kssb_flush ${basename}
+#endif
+#define ${basename}_acquire ${basename}_no_kssb_flush
 #define ${basename}_release ${basename}
-#define ${basename}_relaxed ${basename}
+#define ${basename}_relaxed ${basename}_no_kssb_flush
 EOF
 }
 
@@ -214,6 +217,13 @@ cat << EOF
 #define _LINUX_ATOMIC_FALLBACK_H
 
 #include <linux/compiler.h>
+
+#if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
+extern void __ssb_pso_flush(char *);
+#define kssb_flush() __ssb_pso_flush(NULL)
+#else
+#define kssb_flush() do {} while(0)
+#endif
 
 EOF
 
