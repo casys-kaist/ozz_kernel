@@ -189,18 +189,9 @@ static long kmemcov_ioctl_locked(struct kmemcov *kmemcov, unsigned int cmd,
 				 unsigned long arg)
 {
 	struct task_struct *t;
-	unsigned long size, unused;
+	unsigned long unused;
 
 	switch (cmd) {
-	case KMEMCOV_INIT_TRACE:
-		if (kmemcov->mode != KMEMCOV_MODE_DISABLED)
-			return -EBUSY;
-		size = arg;
-		if (size < 2 || size > INT_MAX / sizeof(struct kmemcov_access))
-			return -EINVAL;
-		kmemcov->size = size;
-		kmemcov->mode = KMEMCOV_MODE_INIT;
-		return 0;
 	case KMEMCOV_ENABLE:
 		unused = arg;
 		if (kmemcov->mode != KMEMCOV_MODE_INIT || !kmemcov->area ||
@@ -277,10 +268,29 @@ static long kmemcov_ioctl(struct file *filp, unsigned int cmd,
 			  unsigned long arg)
 {
 	int res;
+	unsigned long size;
+
 	struct kmemcov *kmemcov = filp->private_data;
-	spin_lock(&kmemcov->lock);
-	res = kmemcov_ioctl_locked(kmemcov, cmd, arg);
-	spin_unlock(&kmemcov->lock);
+
+	switch (cmd) {
+	case KMEMCOV_INIT_TRACE:
+		size = arg;
+		if (size < 2 || size > INT_MAX / sizeof(struct kmemcov_access))
+			return -EINVAL;
+		spin_lock(&kmemcov->lock);
+		if (kmemcov->mode != KMEMCOV_MODE_DISABLED) {
+			spin_unlock(&kmemcov->lock);
+			return -EBUSY;
+		}
+		kmemcov->size = size;
+		kmemcov->mode = KMEMCOV_MODE_INIT;
+		spin_unlock(&kmemcov->lock);
+		return 0;
+	default:
+		spin_lock(&kmemcov->lock);
+		res = kmemcov_ioctl_locked(kmemcov, cmd, arg);
+		spin_unlock(&kmemcov->lock);
+	}
 	return res;
 }
 
