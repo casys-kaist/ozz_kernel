@@ -230,37 +230,27 @@ static long kmemcov_ioctl_locked(struct kmemcov *kmemcov, unsigned int cmd,
 static int kmemcov_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	int res = 0;
-	void *area;
 	struct kmemcov *kmemcov = vma->vm_file->private_data;
 	unsigned long size, off;
 	struct page *page;
 
-	area = vmalloc_user(vma->vm_end - vma->vm_start);
-	if (!area)
-		return -ENOMEM;
-
 	spin_lock(&kmemcov->lock);
 	size = kmemcov->size * sizeof(struct kmemcov_access);
-	if (kmemcov->mode != KMEMCOV_MODE_INIT || vma->vm_pgoff != 0 ||
+	if (kmemcov->area == NULL || vma->vm_pgoff != 0 ||
 	    vma->vm_end - vma->vm_start != size) {
 		res = -EINVAL;
 		goto exit;
 	}
-
-	if (!kmemcov->area) {
-		kmemcov->area = area;
-		vma->vm_flags |= VM_DONTEXPAND;
-		spin_unlock(&kmemcov->lock);
-		for (off = 0; off < size; off += PAGE_SIZE) {
-			page = vmalloc_to_page(kmemcov->area + off);
-			if (vm_insert_page(vma, vma->vm_start + off, page))
-				WARN_ONCE(1, "vm_insert_page() failed");
-		}
-		return 0;
+	spin_unlock(&kmemcov->lock);
+	vma->vm_flags |= VM_DONTEXPAND;
+	for (off = 0; off < size; off += PAGE_SIZE) {
+		page = vmalloc_to_page(kmemcov->area + off);
+		if (vm_insert_page(vma, vma->vm_start + off, page))
+			WARN_ONCE(1, "vm_insert_page() failed");
 	}
+	return 0;
 exit:
 	spin_unlock(&kmemcov->lock);
-	vfree(area);
 	return res;
 }
 
@@ -269,19 +259,24 @@ static long kmemcov_ioctl(struct file *filp, unsigned int cmd,
 {
 	int res;
 	unsigned long size;
+	void *area;
 
 	struct kmemcov *kmemcov = filp->private_data;
-
 	switch (cmd) {
 	case KMEMCOV_INIT_TRACE:
 		size = arg;
 		if (size < 2 || size > INT_MAX / sizeof(struct kmemcov_access))
 			return -EINVAL;
+		area = vmalloc_user(size * sizeof(struct kmemcov_access));
+		if (area == NULL)
+			return -ENOMEM;
 		spin_lock(&kmemcov->lock);
 		if (kmemcov->mode != KMEMCOV_MODE_DISABLED) {
 			spin_unlock(&kmemcov->lock);
+			vfree(area);
 			return -EBUSY;
 		}
+		kmemcov->area = area;
 		kmemcov->size = size;
 		kmemcov->mode = KMEMCOV_MODE_INIT;
 		spin_unlock(&kmemcov->lock);
