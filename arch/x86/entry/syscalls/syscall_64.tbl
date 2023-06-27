@@ -379,6 +379,9 @@
 503 common ssb_switch sys_ssb_switch
 504 common pso_clear sys_pso_clear
 
+505 common ssb_tso_thread1 sys_ssb_tso_thread1
+506 common ssb_tso_thread2 sys_ssb_tso_thread2
+507 common tso_check sys_tso_check
 
 509 common qcsched_simple_write sys_qcsched_simple_write
 510 common qcsched_simple_read sys_qcsched_simple_read
