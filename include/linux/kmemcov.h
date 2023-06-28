@@ -23,32 +23,13 @@ void sanitize_memcov_trace_flush(void);
 
 #else
 
-static inline void kmemcov_task_init(struct task_struct *t)
-{
-}
-static inline void kmemcov_task_exit(struct task_struct *t)
-{
-}
-static inline void __sanitize_memcov_trace_store(unsigned long inst, void *addr,
-						 size_t size)
-{
-}
-static inline void __sanitize_memcov_trace_load(unsigned long inst, void *addr,
-						size_t size)
-{
-}
-static inline void sanitize_memcov_trace_store(const volatile void *addr,
-					       size_t size)
-{
-}
-static inline void sanitize_memcov_trace_load(const volatile void *addr,
-					      size_t size)
-{
-}
-
-static void sanitize_memcov_trace_flush(void)
-{
-}
+#define kmemcov_task_init(...) do { } while (0)
+#define kmemcov_task_exit(...) do { } while (0)
+#define __sanitize_memcov_trace_store(...) do { } while (0)
+#define __sanitize_memcov_trace_load(...) do { } while (0)
+#define sanitize_memcov_trace_store(...) do { } while (0)
+#define sanitize_memcov_trace_load(...) do { } while (0)
+#define sanitize_memcov_trace_flush(...) do { } while (0)
 
 #endif /* CONFIG_KMEMCOV */
 
