@@ -7,7 +7,6 @@
 #include <linux/iopoll.h>
 #include <linux/phy.h>
 #include <linux/of_net.h>
-#include <linux/of_mdio.h>
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
 #include <linux/math.h>
@@ -16,17 +15,18 @@
 
 #include "lan937x_reg.h"
 #include "ksz_common.h"
+#include "ksz9477.h"
 #include "lan937x.h"
 
 static int lan937x_cfg(struct ksz_device *dev, u32 addr, u8 bits, bool set)
 {
-	return regmap_update_bits(dev->regmap[0], addr, bits, set ? bits : 0);
+	return regmap_update_bits(ksz_regmap_8(dev), addr, bits, set ? bits : 0);
 }
 
 static int lan937x_port_cfg(struct ksz_device *dev, int port, int offset,
 			    u8 bits, bool set)
 {
-	return regmap_update_bits(dev->regmap[0], PORT_CTRL_ADDR(port, offset),
+	return regmap_update_bits(ksz_regmap_8(dev), PORT_CTRL_ADDR(port, offset),
 				  bits, set ? bits : 0);
 }
 
@@ -86,7 +86,7 @@ static int lan937x_internal_phy_write(struct ksz_device *dev, int addr, int reg,
 	if (ret < 0)
 		return ret;
 
-	ret = regmap_read_poll_timeout(dev->regmap[1], REG_VPHY_IND_CTRL__2,
+	ret = regmap_read_poll_timeout(ksz_regmap_16(dev), REG_VPHY_IND_CTRL__2,
 				       value, !(value & VPHY_IND_BUSY), 10,
 				       1000);
 	if (ret < 0) {
@@ -116,7 +116,7 @@ static int lan937x_internal_phy_read(struct ksz_device *dev, int addr, int reg,
 	if (ret < 0)
 		return ret;
 
-	ret = regmap_read_poll_timeout(dev->regmap[1], REG_VPHY_IND_CTRL__2,
+	ret = regmap_read_poll_timeout(ksz_regmap_16(dev), REG_VPHY_IND_CTRL__2,
 				       value, !(value & VPHY_IND_BUSY), 10,
 				       1000);
 	if (ret < 0) {
@@ -128,81 +128,14 @@ static int lan937x_internal_phy_read(struct ksz_device *dev, int addr, int reg,
 	return ksz_read16(dev, REG_VPHY_IND_DATA__2, val);
 }
 
-void lan937x_r_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 *data)
+int lan937x_r_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 *data)
 {
-	lan937x_internal_phy_read(dev, addr, reg, data);
+	return lan937x_internal_phy_read(dev, addr, reg, data);
 }
 
-void lan937x_w_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 val)
+int lan937x_w_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 val)
 {
-	lan937x_internal_phy_write(dev, addr, reg, val);
-}
-
-static int lan937x_sw_mdio_read(struct mii_bus *bus, int addr, int regnum)
-{
-	struct ksz_device *dev = bus->priv;
-	u16 val;
-	int ret;
-
-	if (regnum & MII_ADDR_C45)
-		return -EOPNOTSUPP;
-
-	ret = lan937x_internal_phy_read(dev, addr, regnum, &val);
-	if (ret < 0)
-		return ret;
-
-	return val;
-}
-
-static int lan937x_sw_mdio_write(struct mii_bus *bus, int addr, int regnum,
-				 u16 val)
-{
-	struct ksz_device *dev = bus->priv;
-
-	if (regnum & MII_ADDR_C45)
-		return -EOPNOTSUPP;
-
-	return lan937x_internal_phy_write(dev, addr, regnum, val);
-}
-
-static int lan937x_mdio_register(struct ksz_device *dev)
-{
-	struct dsa_switch *ds = dev->ds;
-	struct device_node *mdio_np;
-	struct mii_bus *bus;
-	int ret;
-
-	mdio_np = of_get_child_by_name(dev->dev->of_node, "mdio");
-	if (!mdio_np) {
-		dev_err(ds->dev, "no MDIO bus node\n");
-		return -ENODEV;
-	}
-
-	bus = devm_mdiobus_alloc(ds->dev);
-	if (!bus) {
-		of_node_put(mdio_np);
-		return -ENOMEM;
-	}
-
-	bus->priv = dev;
-	bus->read = lan937x_sw_mdio_read;
-	bus->write = lan937x_sw_mdio_write;
-	bus->name = "lan937x slave smi";
-	snprintf(bus->id, MII_BUS_ID_SIZE, "SMI-%d", ds->index);
-	bus->parent = ds->dev;
-	bus->phy_mask = ~ds->phys_mii_mask;
-
-	ds->slave_mii_bus = bus;
-
-	ret = devm_of_mdiobus_register(ds->dev, bus, mdio_np);
-	if (ret) {
-		dev_err(ds->dev, "unable to register MDIO bus %s\n",
-			bus->id);
-	}
-
-	of_node_put(mdio_np);
-
-	return ret;
+	return lan937x_internal_phy_write(dev, addr, reg, val);
 }
 
 int lan937x_reset_switch(struct ksz_device *dev)
@@ -225,6 +158,10 @@ int lan937x_reset_switch(struct ksz_device *dev)
 	if (ret < 0)
 		return ret;
 
+	ret = ksz_write32(dev, REG_SW_INT_STATUS__4, POR_READY_INT);
+	if (ret < 0)
+		return ret;
+
 	ret = ksz_write32(dev, REG_SW_PORT_INT_MASK__4, 0xFF);
 	if (ret < 0)
 		return ret;
@@ -243,6 +180,9 @@ void lan937x_port_setup(struct ksz_device *dev, int port, bool cpu_port)
 	if (cpu_port)
 		lan937x_port_cfg(dev, port, REG_PORT_CTRL_0,
 				 PORT_TAIL_TAG_ENABLE, true);
+
+	/* Enable the Port Queue split */
+	ksz9477_port_queue_split(dev, port);
 
 	/* set back pressure for half duplex */
 	lan937x_port_cfg(dev, port, REG_PORT_MAC_CTRL_1, PORT_BACK_PRESSURE,
@@ -306,9 +246,30 @@ int lan937x_change_mtu(struct ksz_device *dev, int port, int new_mtu)
 	}
 
 	/* Write the frame size in PORT_MAX_FR_SIZE register */
-	ksz_pwrite16(dev, port, PORT_MAX_FR_SIZE, new_mtu);
+	ret = ksz_pwrite16(dev, port, PORT_MAX_FR_SIZE, new_mtu);
+	if (ret) {
+		dev_err(ds->dev, "failed to update mtu for port %d\n", port);
+		return ret;
+	}
 
 	return 0;
+}
+
+int lan937x_set_ageing_time(struct ksz_device *dev, unsigned int msecs)
+{
+	u32 secs = msecs / 1000;
+	u32 value;
+	int ret;
+
+	value = FIELD_GET(SW_AGE_PERIOD_7_0_M, secs);
+
+	ret = ksz_write8(dev, REG_SW_AGE_PERIOD__1, value);
+	if (ret < 0)
+		return ret;
+
+	value = FIELD_GET(SW_AGE_PERIOD_19_8_M, secs);
+
+	return ksz_write16(dev, REG_SW_AGE_PERIOD__2, value);
 }
 
 static void lan937x_set_tune_adj(struct ksz_device *dev, int port,
@@ -379,6 +340,18 @@ void lan937x_setup_rgmii_delay(struct ksz_device *dev, int port)
 	}
 }
 
+int lan937x_tc_cbs_set_cinc(struct ksz_device *dev, int port, u32 val)
+{
+	return ksz_pwrite32(dev, port, REG_PORT_MTI_CREDIT_INCREMENT, val);
+}
+
+int lan937x_switch_init(struct ksz_device *dev)
+{
+	dev->port_mask = (1 << dev->info->port_cnt) - 1;
+
+	return 0;
+}
+
 int lan937x_setup(struct dsa_switch *ds)
 {
 	struct ksz_device *dev = ds->priv;
@@ -388,12 +361,6 @@ int lan937x_setup(struct dsa_switch *ds)
 	ret = lan937x_enable_spi_indirect_access(dev);
 	if (ret < 0) {
 		dev_err(dev->dev, "failed to enable spi indirect access");
-		return ret;
-	}
-
-	ret = lan937x_mdio_register(dev);
-	if (ret < 0) {
-		dev_err(dev->dev, "failed to register the mdio");
 		return ret;
 	}
 
@@ -422,11 +389,9 @@ int lan937x_setup(struct dsa_switch *ds)
 	return 0;
 }
 
-int lan937x_switch_init(struct ksz_device *dev)
+void lan937x_teardown(struct dsa_switch *ds)
 {
-	dev->port_mask = (1 << dev->info->port_cnt) - 1;
 
-	return 0;
 }
 
 void lan937x_switch_exit(struct ksz_device *dev)

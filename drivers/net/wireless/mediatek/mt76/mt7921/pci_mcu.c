@@ -30,12 +30,7 @@ mt7921_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 	if (ret)
 		return ret;
 
-	if (cmd == MCU_UNI_CMD(HIF_CTRL) ||
-	    cmd == MCU_UNI_CMD(SUSPEND) ||
-	    cmd == MCU_UNI_CMD(OFFLOAD))
-		mdev->mcu.timeout = HZ;
-	else
-		mdev->mcu.timeout = 3 * HZ;
+	mdev->mcu.timeout = 3 * HZ;
 
 	if (cmd == MCU_CMD(FW_SCATTER))
 		txq = MT_MCUQ_FWDL;
@@ -49,7 +44,6 @@ int mt7921e_mcu_init(struct mt7921_dev *dev)
 		.headroom = sizeof(struct mt76_connac2_mcu_txd),
 		.mcu_skb_send_msg = mt7921_mcu_send_message,
 		.mcu_parse_response = mt7921_mcu_parse_response,
-		.mcu_restart = mt76_connac_mcu_restart,
 	};
 	int err;
 
@@ -58,6 +52,8 @@ int mt7921e_mcu_init(struct mt7921_dev *dev)
 	err = mt7921e_driver_own(dev);
 	if (err)
 		return err;
+
+	mt76_rmw_field(dev, MT_PCIE_MAC_PM, MT_PCIE_MAC_PM_L0S_DIS, 1);
 
 	err = mt7921_run_firmware(dev);
 
@@ -72,8 +68,8 @@ int __mt7921e_mcu_drv_pmctrl(struct mt7921_dev *dev)
 
 	for (i = 0; i < MT7921_DRV_OWN_RETRY_COUNT; i++) {
 		mt76_wr(dev, MT_CONN_ON_LPCTL, PCIE_LPCR_HOST_CLR_OWN);
-		if (mt76_poll_msec(dev, MT_CONN_ON_LPCTL,
-				   PCIE_LPCR_HOST_OWN_SYNC, 0, 50))
+		if (mt76_poll_msec_tick(dev, MT_CONN_ON_LPCTL,
+					PCIE_LPCR_HOST_OWN_SYNC, 0, 50, 1))
 			break;
 	}
 
@@ -113,8 +109,8 @@ int mt7921e_mcu_fw_pmctrl(struct mt7921_dev *dev)
 
 	for (i = 0; i < MT7921_DRV_OWN_RETRY_COUNT; i++) {
 		mt76_wr(dev, MT_CONN_ON_LPCTL, PCIE_LPCR_HOST_SET_OWN);
-		if (mt76_poll_msec(dev, MT_CONN_ON_LPCTL,
-				   PCIE_LPCR_HOST_OWN_SYNC, 4, 50))
+		if (mt76_poll_msec_tick(dev, MT_CONN_ON_LPCTL,
+					PCIE_LPCR_HOST_OWN_SYNC, 4, 50, 1))
 			break;
 	}
 

@@ -33,7 +33,7 @@ static int mwifiex_11n_dispatch_amsdu_pkt(struct mwifiex_private *priv,
 		skb_trim(skb, le16_to_cpu(local_rx_pd->rx_pkt_length));
 
 		ieee80211_amsdu_to_8023s(skb, &list, priv->curr_addr,
-					 priv->wdev.iftype, 0, NULL, NULL);
+					 priv->wdev.iftype, 0, NULL, NULL, false);
 
 		while (!skb_queue_empty(&list)) {
 			struct rx_packet_hdr *rx_hdr;
@@ -335,7 +335,7 @@ mwifiex_11n_create_rx_reorder_tbl(struct mwifiex_private *priv, u8 *ta,
 	struct mwifiex_sta_node *node;
 
 	/*
-	 * If we get a TID, ta pair which is already present dispatch all the
+	 * If we get a TID, ta pair which is already present dispatch all
 	 * the packets and move the window size until the ssn
 	 */
 	tbl = mwifiex_11n_get_rx_reorder_tbl(priv, tid, ta);

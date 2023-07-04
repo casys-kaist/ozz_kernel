@@ -901,7 +901,10 @@ static void nau8824_jdet_work(struct work_struct *work)
 		NAU8824_IRQ_KEY_RELEASE_DIS |
 		NAU8824_IRQ_KEY_SHORT_PRESS_DIS, 0);
 
-	nau8824_sema_release(nau8824);
+	if (nau8824->resume_lock) {
+		nau8824_sema_release(nau8824);
+		nau8824->resume_lock = false;
+	}
 }
 
 static void nau8824_setup_auto_irq(struct nau8824 *nau8824)
@@ -966,7 +969,10 @@ static irqreturn_t nau8824_interrupt(int irq, void *data)
 		/* release semaphore held after resume,
 		 * and cancel jack detection
 		 */
-		nau8824_sema_release(nau8824);
+		if (nau8824->resume_lock) {
+			nau8824_sema_release(nau8824);
+			nau8824->resume_lock = false;
+		}
 		cancel_work_sync(&nau8824->jdet_work);
 	} else if (active_irq & NAU8824_KEY_SHORT_PRESS_IRQ) {
 		int key_status, button_pressed;
@@ -1524,6 +1530,7 @@ static int __maybe_unused nau8824_suspend(struct snd_soc_component *component)
 static int __maybe_unused nau8824_resume(struct snd_soc_component *component)
 {
 	struct nau8824 *nau8824 = snd_soc_component_get_drvdata(component);
+	int ret;
 
 	regcache_cache_only(nau8824->regmap, false);
 	regcache_sync(nau8824->regmap);
@@ -1531,7 +1538,10 @@ static int __maybe_unused nau8824_resume(struct snd_soc_component *component)
 		/* Hold semaphore to postpone playback happening
 		 * until jack detection done.
 		 */
-		nau8824_sema_acquire(nau8824, 0);
+		nau8824->resume_lock = true;
+		ret = nau8824_sema_acquire(nau8824, 0);
+		if (ret)
+			nau8824->resume_lock = false;
 		enable_irq(nau8824->irq);
 	}
 
@@ -1893,6 +1903,30 @@ static const struct dmi_system_id nau8824_quirk_table[] = {
 		},
 		.driver_data = (void *)(NAU8824_MONO_SPEAKER),
 	},
+	{
+		/* Positivo CW14Q01P */
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Positivo Tecnologia SA"),
+			DMI_MATCH(DMI_BOARD_NAME, "CW14Q01P"),
+		},
+		.driver_data = (void *)(NAU8824_JD_ACTIVE_HIGH),
+	},
+	{
+		/* Positivo K1424G */
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Positivo Tecnologia SA"),
+			DMI_MATCH(DMI_BOARD_NAME, "K1424G"),
+		},
+		.driver_data = (void *)(NAU8824_JD_ACTIVE_HIGH),
+	},
+	{
+		/* Positivo N14ZP74G */
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Positivo Tecnologia SA"),
+			DMI_MATCH(DMI_BOARD_NAME, "N14ZP74G"),
+		},
+		.driver_data = (void *)(NAU8824_JD_ACTIVE_HIGH),
+	},
 	{}
 };
 
@@ -1940,6 +1974,7 @@ static int nau8824_i2c_probe(struct i2c_client *i2c)
 	nau8824->regmap = devm_regmap_init_i2c(i2c, &nau8824_regmap_config);
 	if (IS_ERR(nau8824->regmap))
 		return PTR_ERR(nau8824->regmap);
+	nau8824->resume_lock = false;
 	nau8824->dev = dev;
 	nau8824->irq = i2c->irq;
 	sema_init(&nau8824->jd_sem, 1);
@@ -1995,7 +2030,7 @@ static struct i2c_driver nau8824_i2c_driver = {
 		.of_match_table = of_match_ptr(nau8824_of_ids),
 		.acpi_match_table = ACPI_PTR(nau8824_acpi_match),
 	},
-	.probe_new = nau8824_i2c_probe,
+	.probe = nau8824_i2c_probe,
 	.id_table = nau8824_i2c_ids,
 };
 module_i2c_driver(nau8824_i2c_driver);

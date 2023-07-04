@@ -50,6 +50,8 @@ enum mlx5_flow_destination_type {
 	MLX5_FLOW_DESTINATION_TYPE_PORT,
 	MLX5_FLOW_DESTINATION_TYPE_COUNTER,
 	MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM,
+	MLX5_FLOW_DESTINATION_TYPE_RANGE,
+	MLX5_FLOW_DESTINATION_TYPE_TABLE_TYPE,
 };
 
 enum {
@@ -79,6 +81,7 @@ static inline void build_leftovers_ft_param(int *priority,
 
 enum mlx5_flow_namespace_type {
 	MLX5_FLOW_NAMESPACE_BYPASS,
+	MLX5_FLOW_NAMESPACE_KERNEL_RX_MACSEC,
 	MLX5_FLOW_NAMESPACE_LAG,
 	MLX5_FLOW_NAMESPACE_OFFLOADS,
 	MLX5_FLOW_NAMESPACE_ETHTOOL,
@@ -92,13 +95,16 @@ enum mlx5_flow_namespace_type {
 	MLX5_FLOW_NAMESPACE_SNIFFER_RX,
 	MLX5_FLOW_NAMESPACE_SNIFFER_TX,
 	MLX5_FLOW_NAMESPACE_EGRESS,
-	MLX5_FLOW_NAMESPACE_EGRESS_KERNEL,
+	MLX5_FLOW_NAMESPACE_EGRESS_IPSEC,
+	MLX5_FLOW_NAMESPACE_EGRESS_MACSEC,
 	MLX5_FLOW_NAMESPACE_RDMA_RX,
 	MLX5_FLOW_NAMESPACE_RDMA_RX_KERNEL,
 	MLX5_FLOW_NAMESPACE_RDMA_TX,
 	MLX5_FLOW_NAMESPACE_PORT_SEL,
 	MLX5_FLOW_NAMESPACE_RDMA_RX_COUNTERS,
 	MLX5_FLOW_NAMESPACE_RDMA_TX_COUNTERS,
+	MLX5_FLOW_NAMESPACE_RDMA_RX_IPSEC,
+	MLX5_FLOW_NAMESPACE_RDMA_TX_IPSEC,
 };
 
 enum {
@@ -141,6 +147,10 @@ enum {
 	MLX5_FLOW_DEST_VPORT_REFORMAT_ID  = BIT(1),
 };
 
+enum mlx5_flow_dest_range_field {
+	MLX5_FLOW_DEST_RANGE_FIELD_PKT_LEN = 0,
+};
+
 struct mlx5_flow_destination {
 	enum mlx5_flow_destination_type	type;
 	union {
@@ -154,6 +164,13 @@ struct mlx5_flow_destination {
 			struct mlx5_pkt_reformat *pkt_reformat;
 			u8		flags;
 		} vport;
+		struct {
+			struct mlx5_flow_table         *hit_ft;
+			struct mlx5_flow_table         *miss_ft;
+			enum mlx5_flow_dest_range_field field;
+			u32                             min;
+			u32                             max;
+		} range;
 		u32			sampler_id;
 	};
 };
@@ -243,10 +260,10 @@ struct mlx5_flow_act {
 	u32 action;
 	struct mlx5_modify_hdr  *modify_hdr;
 	struct mlx5_pkt_reformat *pkt_reformat;
-	union {
-		u32 ipsec_obj_id;
-		uintptr_t esp_id;
-	};
+	struct mlx5_flow_act_crypto_params {
+		u8 type;
+		u32 obj_id;
+	} crypto;
 	u32 flags;
 	struct mlx5_fs_vlan vlan[MLX5_FS_VLAN_DEPTH];
 	struct ib_counters *counters;
@@ -282,6 +299,8 @@ void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
 u64 mlx5_fc_query_lastuse(struct mlx5_fc *counter);
 void mlx5_fc_query_cached(struct mlx5_fc *counter,
 			  u64 *bytes, u64 *packets, u64 *lastuse);
+void mlx5_fc_query_cached_raw(struct mlx5_fc *counter,
+			      u64 *bytes, u64 *packets, u64 *lastuse);
 int mlx5_fc_query(struct mlx5_core_dev *dev, struct mlx5_fc *counter,
 		  u64 *packets, u64 *bytes);
 u32 mlx5_fc_id(struct mlx5_fc *counter);

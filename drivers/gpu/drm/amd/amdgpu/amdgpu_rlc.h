@@ -157,8 +157,8 @@ typedef struct _RLC_TABLE_OF_CONTENT {
 
 struct amdgpu_rlc_funcs {
 	bool (*is_rlc_enabled)(struct amdgpu_device *adev);
-	void (*set_safe_mode)(struct amdgpu_device *adev);
-	void (*unset_safe_mode)(struct amdgpu_device *adev);
+	void (*set_safe_mode)(struct amdgpu_device *adev, int xcc_id);
+	void (*unset_safe_mode)(struct amdgpu_device *adev, int xcc_id);
 	int  (*init)(struct amdgpu_device *adev);
 	u32  (*get_csb_size)(struct amdgpu_device *adev);
 	void (*get_csb_buffer)(struct amdgpu_device *adev, volatile u32 *buffer);
@@ -201,7 +201,7 @@ struct amdgpu_rlc {
 	u32                     cp_table_size;
 
 	/* safe mode for updating CG/PG state */
-	bool in_safe_mode;
+	bool in_safe_mode[8];
 	const struct amdgpu_rlc_funcs *funcs;
 
 	/* for firmware data */
@@ -260,12 +260,14 @@ struct amdgpu_rlc {
 	struct amdgpu_rlcg_reg_access_ctrl reg_access_ctrl;
 };
 
-void amdgpu_gfx_rlc_enter_safe_mode(struct amdgpu_device *adev);
-void amdgpu_gfx_rlc_exit_safe_mode(struct amdgpu_device *adev);
+void amdgpu_gfx_rlc_enter_safe_mode(struct amdgpu_device *adev, int xcc_id);
+void amdgpu_gfx_rlc_exit_safe_mode(struct amdgpu_device *adev, int xcc_id);
 int amdgpu_gfx_rlc_init_sr(struct amdgpu_device *adev, u32 dws);
 int amdgpu_gfx_rlc_init_csb(struct amdgpu_device *adev);
 int amdgpu_gfx_rlc_init_cpt(struct amdgpu_device *adev);
 void amdgpu_gfx_rlc_setup_cp_table(struct amdgpu_device *adev);
 void amdgpu_gfx_rlc_fini(struct amdgpu_device *adev);
-
+int amdgpu_gfx_rlc_init_microcode(struct amdgpu_device *adev,
+				  uint16_t version_major,
+				  uint16_t version_minor);
 #endif

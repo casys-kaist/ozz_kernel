@@ -379,14 +379,12 @@ err_remove_bridge:
 	return ret;
 }
 
-static int dlpc3433_remove(struct i2c_client *client)
+static void dlpc3433_remove(struct i2c_client *client)
 {
 	struct dlpc *dlpc = i2c_get_clientdata(client);
 
 	drm_bridge_remove(&dlpc->bridge);
 	of_node_put(dlpc->host_node);
-
-	return 0;
 }
 
 static const struct i2c_device_id dlpc3433_id[] = {
@@ -402,7 +400,7 @@ static const struct of_device_id dlpc3433_match_table[] = {
 MODULE_DEVICE_TABLE(of, dlpc3433_match_table);
 
 static struct i2c_driver dlpc3433_driver = {
-	.probe_new = dlpc3433_probe,
+	.probe = dlpc3433_probe,
 	.remove = dlpc3433_remove,
 	.id_table = dlpc3433_id,
 	.driver = {

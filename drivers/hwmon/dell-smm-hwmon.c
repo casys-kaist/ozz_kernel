@@ -920,7 +920,7 @@ static const struct hwmon_ops dell_smm_ops = {
 	.write = dell_smm_write,
 };
 
-static const struct hwmon_channel_info *dell_smm_info[] = {
+static const struct hwmon_channel_info * const dell_smm_info[] = {
 	HWMON_CHANNEL_INFO(chip, HWMON_C_REGISTER_TZ),
 	HWMON_CHANNEL_INFO(temp,
 			   HWMON_T_INPUT | HWMON_T_LABEL,
@@ -1355,15 +1355,21 @@ static int __init dell_smm_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, data);
 
 	if (dmi_check_system(i8k_blacklist_fan_support_dmi_table)) {
-		dev_warn(&pdev->dev, "broken Dell BIOS detected, disallow fan support\n");
-		if (!force)
+		if (!force) {
+			dev_notice(&pdev->dev, "Disabling fan support due to BIOS bugs\n");
 			data->disallow_fan_support = true;
+		} else {
+			dev_warn(&pdev->dev, "Enabling fan support despite BIOS bugs\n");
+		}
 	}
 
 	if (dmi_check_system(i8k_blacklist_fan_type_dmi_table)) {
-		dev_warn(&pdev->dev, "broken Dell BIOS detected, disallow fan type call\n");
-		if (!force)
+		if (!force) {
+			dev_notice(&pdev->dev, "Disabling fan type call due to BIOS bugs\n");
 			data->disallow_fan_type_call = true;
+		} else {
+			dev_warn(&pdev->dev, "Enabling fan type call despite BIOS bugs\n");
+		}
 	}
 
 	strscpy(data->bios_version, i8k_get_dmi_data(DMI_BIOS_VERSION),
@@ -1441,9 +1447,10 @@ static int __init i8k_init(void)
 	 */
 	if (i8k_get_dell_signature(I8K_SMM_GET_DELL_SIG1) &&
 	    i8k_get_dell_signature(I8K_SMM_GET_DELL_SIG2)) {
-		pr_err("unable to get SMM Dell signature\n");
 		if (!force)
 			return -ENODEV;
+
+		pr_err("Unable to get Dell SMM signature\n");
 	}
 
 	dell_smm_device = platform_create_bundle(&dell_smm_driver, dell_smm_probe, NULL, 0, NULL,

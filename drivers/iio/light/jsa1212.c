@@ -308,8 +308,7 @@ static const struct regmap_config jsa1212_regmap_config = {
 	.volatile_reg = jsa1212_is_volatile_reg,
 };
 
-static int jsa1212_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
+static int jsa1212_probe(struct i2c_client *client)
 {
 	struct jsa1212_data *data;
 	struct iio_dev *indio_dev;
@@ -373,7 +372,7 @@ static int jsa1212_power_off(struct jsa1212_data *data)
 	return ret;
 }
 
-static int jsa1212_remove(struct i2c_client *client)
+static void jsa1212_remove(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct jsa1212_data *data = iio_priv(indio_dev);
@@ -381,8 +380,6 @@ static int jsa1212_remove(struct i2c_client *client)
 	iio_device_unregister(indio_dev);
 
 	jsa1212_power_off(data);
-
-	return 0;
 }
 
 static int jsa1212_suspend(struct device *dev)

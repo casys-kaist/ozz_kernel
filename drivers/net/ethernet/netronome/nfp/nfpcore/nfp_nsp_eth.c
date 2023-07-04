@@ -27,6 +27,7 @@
 #define NSP_ETH_PORT_PHYLABEL		GENMASK_ULL(59, 54)
 #define NSP_ETH_PORT_FEC_SUPP_BASER	BIT_ULL(60)
 #define NSP_ETH_PORT_FEC_SUPP_RS	BIT_ULL(61)
+#define NSP_ETH_PORT_SUPP_ANEG		BIT_ULL(63)
 
 #define NSP_ETH_PORT_LANES_MASK		cpu_to_le64(NSP_ETH_PORT_LANES)
 
@@ -40,6 +41,7 @@
 #define NSP_ETH_STATE_OVRD_CHNG		BIT_ULL(22)
 #define NSP_ETH_STATE_ANEG		GENMASK_ULL(25, 23)
 #define NSP_ETH_STATE_FEC		GENMASK_ULL(27, 26)
+#define NSP_ETH_STATE_ACT_FEC		GENMASK_ULL(29, 28)
 
 #define NSP_ETH_CTRL_CONFIGURED		BIT_ULL(0)
 #define NSP_ETH_CTRL_ENABLED		BIT_ULL(1)
@@ -170,7 +172,14 @@ nfp_eth_port_translate(struct nfp_nsp *nsp, const union eth_table_entry *src,
 	if (dst->fec_modes_supported)
 		dst->fec_modes_supported |= NFP_FEC_AUTO | NFP_FEC_DISABLED;
 
-	dst->fec = 1 << FIELD_GET(NSP_ETH_STATE_FEC, state);
+	dst->fec = FIELD_GET(NSP_ETH_STATE_FEC, state);
+	dst->act_fec = dst->fec;
+
+	if (nfp_nsp_get_abi_ver_minor(nsp) < 33)
+		return;
+
+	dst->act_fec = FIELD_GET(NSP_ETH_STATE_ACT_FEC, state);
+	dst->supp_aneg = FIELD_GET(NSP_ETH_PORT_SUPP_ANEG, port);
 }
 
 static void
@@ -216,6 +225,30 @@ nfp_eth_calc_port_type(struct nfp_cpp *cpp, struct nfp_eth_table_port *entry)
 		entry->port_type = PORT_FIBRE;
 	else
 		entry->port_type = PORT_DA;
+}
+
+static void
+nfp_eth_read_media(struct nfp_cpp *cpp, struct nfp_nsp *nsp, struct nfp_eth_table_port *entry)
+{
+	struct nfp_eth_media_buf ethm = {
+		.eth_index = entry->eth_index,
+	};
+	unsigned int i;
+	int ret;
+
+	if (!nfp_nsp_has_read_media(nsp))
+		return;
+
+	ret = nfp_nsp_read_media(nsp, &ethm, sizeof(ethm));
+	if (ret) {
+		nfp_err(cpp, "Reading media link modes failed: %d\n", ret);
+		return;
+	}
+
+	for (i = 0; i < 2; i++) {
+		entry->link_modes_supp[i] = le64_to_cpu(ethm.supported_modes[i]);
+		entry->link_modes_ad[i] = le64_to_cpu(ethm.advertised_modes[i]);
+	}
 }
 
 /**
@@ -284,8 +317,10 @@ __nfp_eth_read_ports(struct nfp_cpp *cpp, struct nfp_nsp *nsp)
 					       &table->ports[j++]);
 
 	nfp_eth_calc_port_geometry(cpp, table);
-	for (i = 0; i < table->count; i++)
+	for (i = 0; i < table->count; i++) {
 		nfp_eth_calc_port_type(cpp, &table->ports[i]);
+		nfp_eth_read_media(cpp, nsp, &table->ports[i]);
+	}
 
 	kfree(entries);
 

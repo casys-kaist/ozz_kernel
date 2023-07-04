@@ -186,9 +186,13 @@ struct brcmf_sdio_dev {
 	struct sg_table sgtable;
 	char fw_name[BRCMF_FW_NAME_LEN];
 	char nvram_name[BRCMF_FW_NAME_LEN];
+	char clm_name[BRCMF_FW_NAME_LEN];
 	bool wowl_enabled;
+	bool func1_power_manageable;
+	bool func2_power_manageable;
 	enum brcmf_sdiod_state state;
 	struct brcmf_sdiod_freezer *freezer;
+	const struct firmware *clm_fw;
 };
 
 /* sdio core registers */

@@ -36,6 +36,7 @@
 #include <linux/types.h>
 #include <rdma/ib_verbs.h>
 #include <linux/mlx5/mlx5_ifc.h>
+#include <linux/bitfield.h>
 
 #if defined(__LITTLE_ENDIAN)
 #define MLX5_SET_HOST_ENDIANNESS	0
@@ -290,10 +291,9 @@ enum {
 	MLX5_UMR_INLINE			= (1 << 7),
 };
 
-#define MLX5_UMR_KLM_ALIGNMENT 4
-#define MLX5_UMR_MTT_ALIGNMENT 0x40
-#define MLX5_UMR_MTT_MASK      (MLX5_UMR_MTT_ALIGNMENT - 1)
-#define MLX5_UMR_MTT_MIN_CHUNK_SIZE MLX5_UMR_MTT_ALIGNMENT
+#define MLX5_UMR_FLEX_ALIGNMENT 0x40
+#define MLX5_UMR_MTT_NUM_ENTRIES_ALIGNMENT (MLX5_UMR_FLEX_ALIGNMENT / sizeof(struct mlx5_mtt))
+#define MLX5_UMR_KLM_NUM_ENTRIES_ALIGNMENT (MLX5_UMR_FLEX_ALIGNMENT / sizeof(struct mlx5_klm))
 
 #define MLX5_USER_INDEX_LEN (MLX5_FLD_SZ_BYTES(qpc, user_index) * 8)
 
@@ -325,6 +325,7 @@ enum mlx5_event {
 	MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR = 0x10,
 	MLX5_EVENT_TYPE_WQ_ACCESS_ERROR	   = 0x11,
 	MLX5_EVENT_TYPE_SRQ_CATAS_ERROR	   = 0x12,
+	MLX5_EVENT_TYPE_OBJECT_CHANGE	   = 0x27,
 
 	MLX5_EVENT_TYPE_INTERNAL_ERROR	   = 0x08,
 	MLX5_EVENT_TYPE_PORT_CHANGE	   = 0x09,
@@ -362,11 +363,13 @@ enum mlx5_event {
 
 enum mlx5_driver_event {
 	MLX5_DRIVER_EVENT_TYPE_TRAP = 0,
+	MLX5_DRIVER_EVENT_UPLINK_NETDEV,
 };
 
 enum {
 	MLX5_TRACER_SUBTYPE_OWNERSHIP_CHANGE = 0x0,
 	MLX5_TRACER_SUBTYPE_TRACES_AVAILABLE = 0x1,
+	MLX5_TRACER_SUBTYPE_STRINGS_DB_UPDATE = 0x2,
 };
 
 enum {
@@ -439,6 +442,8 @@ enum {
 	MLX5_OPCODE_RCHECK_PSV		= 0x27,
 
 	MLX5_OPCODE_UMR			= 0x25,
+
+	MLX5_OPCODE_FLOW_TBL_ACCESS	= 0x2c,
 
 	MLX5_OPCODE_ACCESS_ASO		= 0x2d,
 };
@@ -699,12 +704,19 @@ struct mlx5_eqe_temp_warning {
 	__be64 sensor_warning_lsb;
 } __packed;
 
+struct mlx5_eqe_obj_change {
+	u8      rsvd0[2];
+	__be16  obj_type;
+	__be32  obj_id;
+} __packed;
+
 #define SYNC_RST_STATE_MASK    0xf
 
 enum sync_rst_state_type {
 	MLX5_SYNC_RST_STATE_RESET_REQUEST	= 0x0,
 	MLX5_SYNC_RST_STATE_RESET_NOW		= 0x1,
 	MLX5_SYNC_RST_STATE_RESET_ABORT		= 0x2,
+	MLX5_SYNC_RST_STATE_RESET_UNLOAD	= 0x3,
 };
 
 struct mlx5_eqe_sync_fw_update {
@@ -737,6 +749,7 @@ union ev_data {
 	struct mlx5_eqe_xrq_err		xrq_err;
 	struct mlx5_eqe_sync_fw_update	sync_fw_update;
 	struct mlx5_eqe_vhca_state	vhca_state;
+	struct mlx5_eqe_obj_change	obj_change;
 } __packed;
 
 struct mlx5_eqe {
@@ -890,11 +903,6 @@ static inline u8 get_cqe_l4_hdr_type(struct mlx5_cqe64 *cqe)
 	return (cqe->l4_l3_hdr_type >> 4) & 0x7;
 }
 
-static inline u8 get_cqe_l3_hdr_type(struct mlx5_cqe64 *cqe)
-{
-	return (cqe->l4_l3_hdr_type >> 2) & 0x3;
-}
-
 static inline bool cqe_is_tunneled(struct mlx5_cqe64 *cqe)
 {
 	return cqe->tls_outer_l3_tunneled & 0x1;
@@ -976,14 +984,23 @@ enum {
 };
 
 enum {
-	CQE_RSS_HTYPE_IP	= 0x3 << 2,
+	CQE_RSS_HTYPE_IP	= GENMASK(3, 2),
 	/* cqe->rss_hash_type[3:2] - IP destination selected for hash
 	 * (00 = none,  01 = IPv4, 10 = IPv6, 11 = Reserved)
 	 */
-	CQE_RSS_HTYPE_L4	= 0x3 << 6,
+	CQE_RSS_IP_NONE		= 0x0,
+	CQE_RSS_IPV4		= 0x1,
+	CQE_RSS_IPV6		= 0x2,
+	CQE_RSS_RESERVED	= 0x3,
+
+	CQE_RSS_HTYPE_L4	= GENMASK(7, 6),
 	/* cqe->rss_hash_type[7:6] - L4 destination selected for hash
 	 * (00 = none, 01 = TCP. 10 = UDP, 11 = IPSEC.SPI
 	 */
+	CQE_RSS_L4_NONE		= 0x0,
+	CQE_RSS_L4_TCP		= 0x1,
+	CQE_RSS_L4_UDP		= 0x2,
+	CQE_RSS_L4_IPSEC	= 0x3,
 };
 
 enum {
@@ -1086,6 +1103,11 @@ enum {
 	MLX5_VPORT_ADMIN_STATE_DOWN  = 0x0,
 	MLX5_VPORT_ADMIN_STATE_UP    = 0x1,
 	MLX5_VPORT_ADMIN_STATE_AUTO  = 0x2,
+};
+
+enum {
+	MLX5_VPORT_CVLAN_INSERT_WHEN_NO_CVLAN  = 0x1,
+	MLX5_VPORT_CVLAN_INSERT_ALWAYS         = 0x3,
 };
 
 enum {
@@ -1197,9 +1219,12 @@ enum mlx5_cap_type {
 	MLX5_CAP_VDPA_EMULATION = 0x13,
 	MLX5_CAP_DEV_EVENT = 0x14,
 	MLX5_CAP_IPSEC,
+	MLX5_CAP_CRYPTO = 0x1a,
 	MLX5_CAP_DEV_SHAMPO = 0x1d,
+	MLX5_CAP_MACSEC = 0x1f,
 	MLX5_CAP_GENERAL_2 = 0x20,
 	MLX5_CAP_PORT_SELECTION = 0x25,
+	MLX5_CAP_ADV_VIRTUALIZATION = 0x26,
 	/* NUM OF CAP Types */
 	MLX5_CAP_NUM
 };
@@ -1345,6 +1370,12 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_ESW_INGRESS_ACL_MAX(mdev, cap) \
 	MLX5_CAP_ESW_FLOWTABLE_MAX(mdev, flow_table_properties_esw_acl_ingress.cap)
 
+#define MLX5_CAP_ESW_FT_FIELD_SUPPORT_2(mdev, cap) \
+	MLX5_CAP_ESW_FLOWTABLE(mdev, ft_field_support_2_esw_fdb.cap)
+
+#define MLX5_CAP_ESW_FT_FIELD_SUPPORT_2_MAX(mdev, cap) \
+	MLX5_CAP_ESW_FLOWTABLE_MAX(mdev, ft_field_support_2_esw_fdb.cap)
+
 #define MLX5_CAP_ESW(mdev, cap) \
 	MLX5_GET(e_switch_cap, \
 		 mdev->caps.hca[MLX5_CAP_ESWITCH]->cur, cap)
@@ -1364,6 +1395,14 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_PORT_SELECTION_MAX(mdev, cap) \
 	MLX5_GET(port_selection_cap, \
 		 mdev->caps.hca[MLX5_CAP_PORT_SELECTION]->max, cap)
+
+#define MLX5_CAP_ADV_VIRTUALIZATION(mdev, cap) \
+	MLX5_GET(adv_virtualization_cap, \
+		 mdev->caps.hca[MLX5_CAP_ADV_VIRTUALIZATION]->cur, cap)
+
+#define MLX5_CAP_ADV_VIRTUALIZATION_MAX(mdev, cap) \
+	MLX5_GET(adv_virtualization_cap, \
+		 mdev->caps.hca[MLX5_CAP_ADV_VIRTUALIZATION]->max, cap)
 
 #define MLX5_CAP_FLOWTABLE_PORT_SELECTION(mdev, cap) \
 	MLX5_CAP_PORT_SELECTION(mdev, flow_table_properties_port_selection.cap)
@@ -1443,8 +1482,14 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_IPSEC(mdev, cap)\
 	MLX5_GET(ipsec_cap, (mdev)->caps.hca[MLX5_CAP_IPSEC]->cur, cap)
 
+#define MLX5_CAP_CRYPTO(mdev, cap)\
+	MLX5_GET(crypto_cap, (mdev)->caps.hca[MLX5_CAP_CRYPTO]->cur, cap)
+
 #define MLX5_CAP_DEV_SHAMPO(mdev, cap)\
 	MLX5_GET(shampo_cap, mdev->caps.hca_cur[MLX5_CAP_DEV_SHAMPO], cap)
+
+#define MLX5_CAP_MACSEC(mdev, cap)\
+	MLX5_GET(macsec_cap, (mdev)->caps.hca[MLX5_CAP_MACSEC]->cur, cap)
 
 enum {
 	MLX5_CMD_STAT_OK			= 0x0,

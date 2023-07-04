@@ -7,7 +7,10 @@ RISC-V architecture
 
     boot-image-header
     vm-layout
+    hwprobe
     patch-acceptance
+    uabi
+    vector
 
     features
 

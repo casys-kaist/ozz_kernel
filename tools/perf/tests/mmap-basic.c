@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <errno.h>
 #include <inttypes.h>
-/* For the CLR_() macros */
-#include <pthread.h>
 #include <stdlib.h>
 #include <perf/cpumap.h>
 
 #include "debug.h"
+#include "event.h"
 #include "evlist.h"
 #include "evsel.h"
 #include "thread_map.h"
 #include "tests.h"
 #include "util/mmap.h"
+#include "util/sample.h"
 #include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
@@ -114,8 +114,7 @@ static int test__basic_mmap(struct test_suite *test __maybe_unused, int subtest 
 
 	for (i = 0; i < nsyscalls; ++i)
 		for (j = 0; j < expected_nr_events[i]; ++j) {
-			int foo = syscalls[i]();
-			++foo;
+			syscalls[i]();
 		}
 
 	md = &evlist->mmap[0];

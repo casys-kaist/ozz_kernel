@@ -374,7 +374,7 @@ static int tps65217_probe(struct i2c_client *client)
 	return 0;
 }
 
-static int tps65217_remove(struct i2c_client *client)
+static void tps65217_remove(struct i2c_client *client)
 {
 	struct tps65217 *tps = i2c_get_clientdata(client);
 	unsigned int virq;
@@ -388,8 +388,6 @@ static int tps65217_remove(struct i2c_client *client)
 
 	irq_domain_remove(tps->irq_domain);
 	tps->irq_domain = NULL;
-
-	return 0;
 }
 
 static const struct i2c_device_id tps65217_id_table[] = {
@@ -404,7 +402,7 @@ static struct i2c_driver tps65217_driver = {
 		.of_match_table = tps65217_of_match,
 	},
 	.id_table	= tps65217_id_table,
-	.probe_new	= tps65217_probe,
+	.probe		= tps65217_probe,
 	.remove		= tps65217_remove,
 };
 

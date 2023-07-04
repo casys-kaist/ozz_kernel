@@ -9,7 +9,6 @@
  *
  * TODO:
  *  - TDM mode configuration.
- *  - Digital microphone support.
  */
 
 #include <linux/module.h>
@@ -2182,7 +2181,7 @@ err:
 	return ret;
 }
 
-static int wm8903_i2c_remove(struct i2c_client *client)
+static void wm8903_i2c_remove(struct i2c_client *client)
 {
 	struct wm8903_priv *wm8903 = i2c_get_clientdata(client);
 
@@ -2191,8 +2190,6 @@ static int wm8903_i2c_remove(struct i2c_client *client)
 	if (client->irq)
 		free_irq(client->irq, wm8903);
 	wm8903_free_gpio(wm8903);
-
-	return 0;
 }
 
 static const struct of_device_id wm8903_of_match[] = {
@@ -2212,7 +2209,7 @@ static struct i2c_driver wm8903_i2c_driver = {
 		.name = "wm8903",
 		.of_match_table = wm8903_of_match,
 	},
-	.probe_new = wm8903_i2c_probe,
+	.probe =    wm8903_i2c_probe,
 	.remove =   wm8903_i2c_remove,
 	.id_table = wm8903_i2c_id,
 };

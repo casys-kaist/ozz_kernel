@@ -39,7 +39,7 @@ Procedure for submitting patches to the -stable tree
 
    Security patches should not be handled (solely) by the -stable review
    process but should follow the procedures in
-   :ref:`Documentation/admin-guide/security-bugs.rst <securitybugs>`.
+   :ref:`Documentation/process/security-bugs.rst <securitybugs>`.
 
 For all other submissions, choose one of the following procedures
 -----------------------------------------------------------------
@@ -96,6 +96,12 @@ text, like this:
 .. code-block:: none
 
     commit <sha1> upstream.
+
+or alternatively:
+
+.. code-block:: none
+
+    [ Upstream commit <sha1> ]
 
 Additionally, some patches submitted via :ref:`option_1` may have additional
 patch prerequisites which can be cherry-picked. This can be specified in the

@@ -580,11 +580,9 @@ static int ak4375_i2c_probe(struct i2c_client *i2c)
 	return 0;
 }
 
-static int ak4375_i2c_remove(struct i2c_client *i2c)
+static void ak4375_i2c_remove(struct i2c_client *i2c)
 {
 	pm_runtime_disable(&i2c->dev);
-
-	return 0;
 }
 
 static const struct of_device_id ak4375_of_match[] = {
@@ -599,7 +597,7 @@ static struct i2c_driver ak4375_i2c_driver = {
 		.pm = &ak4375_pm,
 		.of_match_table = ak4375_of_match,
 	},
-	.probe_new = ak4375_i2c_probe,
+	.probe = ak4375_i2c_probe,
 	.remove = ak4375_i2c_remove,
 };
 module_i2c_driver(ak4375_i2c_driver);

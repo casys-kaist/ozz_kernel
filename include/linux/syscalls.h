@@ -72,6 +72,8 @@ struct open_how;
 struct mount_attr;
 struct landlock_ruleset_attr;
 enum landlock_rule_type;
+struct cachestat_range;
+struct cachestat;
 
 #include <linux/types.h>
 #include <linux/aio_abi.h>
@@ -261,6 +263,7 @@ static inline int is_syscall_trace_event(struct trace_event_call *tp_event)
 #define SC_VAL64(type, name) ((type)name##_hi << 32 | name##_lo)
 
 #ifdef CONFIG_COMPAT
+#define SYSCALL32_DEFINE0 COMPAT_SYSCALL_DEFINE0
 #define SYSCALL32_DEFINE1 COMPAT_SYSCALL_DEFINE1
 #define SYSCALL32_DEFINE2 COMPAT_SYSCALL_DEFINE2
 #define SYSCALL32_DEFINE3 COMPAT_SYSCALL_DEFINE3
@@ -268,6 +271,7 @@ static inline int is_syscall_trace_event(struct trace_event_call *tp_event)
 #define SYSCALL32_DEFINE5 COMPAT_SYSCALL_DEFINE5
 #define SYSCALL32_DEFINE6 COMPAT_SYSCALL_DEFINE6
 #else
+#define SYSCALL32_DEFINE0 SYSCALL_DEFINE0
 #define SYSCALL32_DEFINE1 SYSCALL_DEFINE1
 #define SYSCALL32_DEFINE2 SYSCALL_DEFINE2
 #define SYSCALL32_DEFINE3 SYSCALL_DEFINE3
@@ -1064,6 +1068,9 @@ asmlinkage long sys_set_mempolicy_home_node(unsigned long start,
 					    unsigned long len,
 					    unsigned long home_node,
 					    unsigned long flags);
+asmlinkage long sys_cachestat(unsigned int fd,
+		struct cachestat_range __user *cstat_range,
+		struct cachestat __user *cstat, unsigned int flags);
 
 /*
  * Architecture-specific system calls
@@ -1290,6 +1297,8 @@ asmlinkage long sys_qcsched_simple_read(void);
 asmlinkage long sys_ni_syscall(void);
 
 #endif /* CONFIG_ARCH_HAS_SYSCALL_WRAPPER */
+
+asmlinkage long sys_ni_posix_timers(void);
 
 /*
  * Kernel code should not call syscalls (i.e., sys_xyzyyz()) directly.

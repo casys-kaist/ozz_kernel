@@ -1486,10 +1486,8 @@ static int wm8960_i2c_probe(struct i2c_client *i2c)
 	return ret;
 }
 
-static int wm8960_i2c_remove(struct i2c_client *client)
-{
-	return 0;
-}
+static void wm8960_i2c_remove(struct i2c_client *client)
+{}
 
 static const struct i2c_device_id wm8960_i2c_id[] = {
 	{ "wm8960", 0 },
@@ -1520,7 +1518,7 @@ static struct i2c_driver wm8960_i2c_driver = {
 		.of_match_table = of_match_ptr(wm8960_of_match),
 		.acpi_match_table = ACPI_PTR(wm8960_acpi_match),
 	},
-	.probe_new = wm8960_i2c_probe,
+	.probe =    wm8960_i2c_probe,
 	.remove =   wm8960_i2c_remove,
 	.id_table = wm8960_i2c_id,
 };

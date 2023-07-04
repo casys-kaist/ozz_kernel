@@ -48,19 +48,25 @@ int fscrypt_policy_to_key_spec(const union fscrypt_policy *policy,
 		       FSCRYPT_KEY_IDENTIFIER_SIZE);
 		return 0;
 	default:
-		WARN_ON(1);
+		WARN_ON_ONCE(1);
 		return -EINVAL;
 	}
 }
 
-static const union fscrypt_policy *
-fscrypt_get_dummy_policy(struct super_block *sb)
+const union fscrypt_policy *fscrypt_get_dummy_policy(struct super_block *sb)
 {
 	if (!sb->s_cop->get_dummy_policy)
 		return NULL;
 	return sb->s_cop->get_dummy_policy(sb);
 }
 
+/*
+ * Return %true if the given combination of encryption modes is supported for v1
+ * (and later) encryption policies.
+ *
+ * Do *not* add anything new here, since v1 encryption policies are deprecated.
+ * New combinations of modes should go in fscrypt_valid_enc_modes_v2() only.
+ */
 static bool fscrypt_valid_enc_modes_v1(u32 contents_mode, u32 filenames_mode)
 {
 	if (contents_mode == FSCRYPT_MODE_AES_256_XTS &&
@@ -83,6 +89,11 @@ static bool fscrypt_valid_enc_modes_v2(u32 contents_mode, u32 filenames_mode)
 	if (contents_mode == FSCRYPT_MODE_AES_256_XTS &&
 	    filenames_mode == FSCRYPT_MODE_AES_256_HCTR2)
 		return true;
+
+	if (contents_mode == FSCRYPT_MODE_SM4_XTS &&
+	    filenames_mode == FSCRYPT_MODE_SM4_CTS)
+		return true;
+
 	return fscrypt_valid_enc_modes_v1(contents_mode, filenames_mode);
 }
 
@@ -452,7 +463,7 @@ static int set_encryption_policy(struct inode *inode,
 				     current->comm, current->pid);
 		break;
 	default:
-		WARN_ON(1);
+		WARN_ON_ONCE(1);
 		return -EINVAL;
 	}
 
@@ -494,7 +505,7 @@ int fscrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 		return -EFAULT;
 	policy.version = version;
 
-	if (!inode_owner_or_capable(&init_user_ns, inode))
+	if (!inode_owner_or_capable(&nop_mnt_idmap, inode))
 		return -EACCES;
 
 	ret = mnt_want_write_file(filp);
@@ -744,12 +755,8 @@ int fscrypt_set_context(struct inode *inode, void *fs_data)
 	 * delayed key setup that requires the inode number.
 	 */
 	if (ci->ci_policy.version == FSCRYPT_POLICY_V2 &&
-	    (ci->ci_policy.v2.flags & FSCRYPT_POLICY_FLAG_IV_INO_LBLK_32)) {
-		const struct fscrypt_master_key *mk =
-			ci->ci_master_key->payload.data[0];
-
-		fscrypt_hash_inode_number(ci, mk);
-	}
+	    (ci->ci_policy.v2.flags & FSCRYPT_POLICY_FLAG_IV_INO_LBLK_32))
+		fscrypt_hash_inode_number(ci, ci->ci_master_key);
 
 	return inode->i_sb->s_cop->set_context(inode, &ctx, ctxsize, fs_data);
 }
@@ -832,19 +839,6 @@ bool fscrypt_dummy_policies_equal(const struct fscrypt_dummy_policy *p1,
 	return fscrypt_policies_equal(p1->policy, p2->policy);
 }
 EXPORT_SYMBOL_GPL(fscrypt_dummy_policies_equal);
-
-/* Deprecated, do not use */
-int fscrypt_set_test_dummy_encryption(struct super_block *sb, const char *arg,
-				      struct fscrypt_dummy_policy *dummy_policy)
-{
-	struct fs_parameter param = {
-		.type = fs_value_is_string,
-		.string = arg ? (char *)arg : "",
-	};
-	return fscrypt_parse_test_dummy_encryption(&param, dummy_policy) ?:
-		fscrypt_add_test_dummy_key(sb, dummy_policy);
-}
-EXPORT_SYMBOL_GPL(fscrypt_set_test_dummy_encryption);
 
 /**
  * fscrypt_show_test_dummy_encryption() - show '-o test_dummy_encryption'

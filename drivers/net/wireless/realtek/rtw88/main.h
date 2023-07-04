@@ -22,7 +22,6 @@
 #define MAX_PG_CAM_BACKUP_NUM		8
 
 #define RTW_SCAN_MAX_SSIDS		4
-#define RTW_SCAN_MAX_IE_LEN		128
 
 #define RTW_MAX_PATTERN_NUM		12
 #define RTW_MAX_PATTERN_MASK_SIZE	16
@@ -33,6 +32,7 @@
 #define RFREG_MASK			0xfffff
 #define INV_RF_DATA			0xffffffff
 #define TX_PAGE_SIZE_SHIFT		7
+#define TX_PAGE_SIZE			(1 << TX_PAGE_SIZE_SHIFT)
 
 #define RTW_CHANNEL_WIDTH_MAX		3
 #define RTW_RF_PATH_MAX			4
@@ -88,7 +88,7 @@ enum rtw_supported_band {
 	RTW_BAND_60G = BIT(NL80211_BAND_60GHZ),
 };
 
-/* now, support upto 80M bw */
+/* now, support up to 80M bw */
 #define RTW_MAX_CHANNEL_WIDTH RTW_CHANNEL_WIDTH_80
 
 enum rtw_bandwidth {
@@ -356,7 +356,7 @@ enum rtw_flags {
 	RTW_FLAG_RUNNING,
 	RTW_FLAG_FW_RUNNING,
 	RTW_FLAG_SCANNING,
-	RTW_FLAG_INACTIVE_PS,
+	RTW_FLAG_POWERON,
 	RTW_FLAG_LEISURE_PS,
 	RTW_FLAG_LEISURE_PS_DEEP,
 	RTW_FLAG_DIG_DISABLE,
@@ -393,6 +393,15 @@ enum rtw_snr {
 	RTW_SNR_2SS_D,
 	/* keep it last */
 	RTW_SNR_NUM
+};
+
+enum rtw_port {
+	RTW_PORT_0 = 0,
+	RTW_PORT_1 = 1,
+	RTW_PORT_2 = 2,
+	RTW_PORT_3 = 3,
+	RTW_PORT_4 = 4,
+	RTW_PORT_NUM
 };
 
 enum rtw_wow_flags {
@@ -510,12 +519,8 @@ struct rtw_timer_list {
 
 struct rtw_channel_params {
 	u8 center_chan;
+	u8 primary_chan;
 	u8 bandwidth;
-	u8 primary_chan_idx;
-	/* center channel by different available bandwidth,
-	 * val of (bw > current bandwidth) is invalid
-	 */
-	u8 cch_by_bw[RTW_MAX_CHANNEL_WIDTH + 1];
 };
 
 struct rtw_hw_reg {
@@ -738,6 +743,7 @@ struct rtw_txq {
 DECLARE_EWMA(rssi, 10, 16);
 
 struct rtw_sta_info {
+	struct rtw_dev *rtwdev;
 	struct ieee80211_sta *sta;
 	struct ieee80211_vif *vif;
 
@@ -762,6 +768,8 @@ struct rtw_sta_info {
 
 	bool use_cfg_mask;
 	struct cfg80211_bitrate_mask *mask;
+
+	struct work_struct rc_work;
 };
 
 enum rtw_bfee_role {
@@ -795,6 +803,7 @@ struct rtw_bf_info {
 struct rtw_vif {
 	enum rtw_net_type net_type;
 	u16 aid;
+	u8 mac_id; /* for STA mode only */
 	u8 mac_addr[ETH_ALEN];
 	u8 bssid[ETH_ALEN];
 	u8 port;
@@ -875,6 +884,10 @@ struct rtw_chip_ops {
 			       bool is_tx2_path);
 	void (*config_txrx_mode)(struct rtw_dev *rtwdev, u8 tx_path,
 				 u8 rx_path, bool is_tx2_path);
+	/* for USB/SDIO only */
+	void (*fill_txdesc_checksum)(struct rtw_dev *rtwdev,
+				     struct rtw_tx_pkt_info *pkt_info,
+				     u8 *txdesc);
 
 	/* for coex */
 	void (*coex_set_init)(struct rtw_dev *rtwdev);
@@ -1168,6 +1181,7 @@ struct rtw_chip_info {
 	u32 txff_size;
 	u32 rxff_size;
 	u32 fw_rxff_size;
+	u16 rsvd_drv_pg_num;
 	u8 band;
 	u8 page_size;
 	u8 csi_buf_pg_num;
@@ -1232,6 +1246,7 @@ struct rtw_chip_info {
 	const char *wow_fw_name;
 	const struct wiphy_wowlan_support *wowlan_stub;
 	const u8 max_sched_scan_ssids;
+	const u16 max_scan_ie_len;
 
 	/* coex paras */
 	u32 coex_para_ver;
@@ -1504,8 +1519,6 @@ struct rtw_coex_stat {
 };
 
 struct rtw_coex {
-	/* protects coex info request section */
-	struct mutex mutex;
 	struct sk_buff_head queue;
 	wait_queue_head_t wait;
 
@@ -1853,6 +1866,8 @@ struct rtw_fw_state {
 	u8 sub_index;
 	u16 h2c_version;
 	u32 feature;
+	u32 feature_ext;
+	enum rtw_fw_type type;
 };
 
 enum rtw_sar_sources {
@@ -1870,7 +1885,7 @@ enum rtw_sar_bands {
 	RTW_SAR_BAND_NR,
 };
 
-/* the union is reserved for other knids of SAR sources
+/* the union is reserved for other kinds of SAR sources
  * which might not re-use same format with array common.
  */
 union rtw_sar_cfg {
@@ -1889,13 +1904,16 @@ struct rtw_hal {
 	u8 cut_version;
 	u8 mp_chip;
 	u8 oem_id;
+	u8 pkg_type;
 	struct rtw_phy_cond phy_cond;
+	bool rfe_btg;
 
 	u8 ps_mode;
 	u8 current_channel;
 	u8 current_primary_channel_index;
 	u8 current_band_width;
 	u8 current_band_type;
+	u8 primary_channel;
 
 	/* center channel for different available bandwidth,
 	 * val of (bw > current_band_width) is invalid
@@ -1967,6 +1985,7 @@ struct rtw_hw_scan_info {
 	struct ieee80211_vif *scanning_vif;
 	u8 probe_pg_size;
 	u8 op_pri_ch_idx;
+	u8 op_pri_ch;
 	u8 op_chan;
 	u8 op_bw;
 };
@@ -1978,7 +1997,7 @@ struct rtw_dev {
 	struct rtw_hci hci;
 
 	struct rtw_hw_scan_info scan_info;
-	struct rtw_chip_info *chip;
+	const struct rtw_chip_info *chip;
 	struct rtw_hal hal;
 	struct rtw_fifo_conf fifo;
 	struct rtw_fw_state fw;
@@ -1993,9 +2012,6 @@ struct rtw_dev {
 
 	/* ensures exclusive access from mac80211 callbacks */
 	struct mutex mutex;
-
-	/* read/write rf register */
-	spinlock_t rf_lock;
 
 	/* watch dog every 2 sec */
 	struct delayed_work watch_dog_work;
@@ -2020,10 +2036,8 @@ struct rtw_dev {
 	struct rtw_tx_report tx_report;
 
 	struct {
-		/* incicate the mail box to use with fw */
+		/* indicate the mail box to use with fw */
 		u8 last_box_num;
-		/* protect to send h2c to fw */
-		spinlock_t lock;
 		u32 seq;
 	} h2c;
 
@@ -2038,6 +2052,7 @@ struct rtw_dev {
 	u8 sta_cnt;
 	u32 rts_threshold;
 
+	DECLARE_BITMAP(hw_port, RTW_PORT_NUM);
 	DECLARE_BITMAP(mac_id_map, RTW_MAX_MAC_ID_NUM);
 	DECLARE_BITMAP(flags, NUM_OF_RTW_FLAGS);
 
@@ -2049,6 +2064,7 @@ struct rtw_dev {
 
 	bool need_rfk;
 	struct completion fw_scan_density;
+	bool ap_active;
 
 	/* hci related data, must be last */
 	u8 priv[] __aligned(sizeof(void *));
@@ -2132,6 +2148,20 @@ static inline int rtw_chip_dump_fw_crash(struct rtw_dev *rtwdev)
 	return 0;
 }
 
+static inline
+enum nl80211_band rtw_hw_to_nl80211_band(enum rtw_supported_band hw_band)
+{
+	switch (hw_band) {
+	default:
+	case RTW_BAND_2G:
+		return NL80211_BAND_2GHZ;
+	case RTW_BAND_5G:
+		return NL80211_BAND_5GHZ;
+	case RTW_BAND_60G:
+		return NL80211_BAND_60GHZ;
+	}
+}
+
 void rtw_set_rx_freq_band(struct rtw_rx_pkt_stat *pkt_stat, u8 channel);
 void rtw_set_dtim_period(struct rtw_dev *rtwdev, int dtim_period);
 void rtw_get_channel_params(struct cfg80211_chan_def *chandef,
@@ -2173,4 +2203,10 @@ int rtw_dump_fw(struct rtw_dev *rtwdev, const u32 ocp_src, u32 size,
 		u32 fwcd_item);
 int rtw_dump_reg(struct rtw_dev *rtwdev, const u32 addr, const u32 size);
 void rtw_set_txrx_1ss(struct rtw_dev *rtwdev, bool config_1ss);
+void rtw_update_channel(struct rtw_dev *rtwdev, u8 center_channel,
+			u8 primary_channel, enum rtw_supported_band band,
+			enum rtw_bandwidth bandwidth);
+void rtw_core_port_switch(struct rtw_dev *rtwdev, struct ieee80211_vif *vif);
+bool rtw_core_check_sta_active(struct rtw_dev *rtwdev);
+void rtw_core_enable_beacon(struct rtw_dev *rtwdev, bool enable);
 #endif

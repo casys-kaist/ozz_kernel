@@ -58,6 +58,23 @@ enum {
 	TLS_NUM_PROTS,
 };
 
+#define CIPHER_SIZE_DESC(cipher) [cipher] = { \
+	.iv = cipher ## _IV_SIZE, \
+	.key = cipher ## _KEY_SIZE, \
+	.salt = cipher ## _SALT_SIZE, \
+	.tag = cipher ## _TAG_SIZE, \
+	.rec_seq = cipher ## _REC_SEQ_SIZE, \
+}
+
+const struct tls_cipher_size_desc tls_cipher_size_desc[] = {
+	CIPHER_SIZE_DESC(TLS_CIPHER_AES_GCM_128),
+	CIPHER_SIZE_DESC(TLS_CIPHER_AES_GCM_256),
+	CIPHER_SIZE_DESC(TLS_CIPHER_AES_CCM_128),
+	CIPHER_SIZE_DESC(TLS_CIPHER_CHACHA20_POLY1305),
+	CIPHER_SIZE_DESC(TLS_CIPHER_SM4_GCM),
+	CIPHER_SIZE_DESC(TLS_CIPHER_SM4_CCM),
+};
+
 static const struct proto *saved_tcpv6_prot;
 static DEFINE_MUTEX(tcpv6_prot_mutex);
 static const struct proto *saved_tcpv4_prot;
@@ -94,7 +111,8 @@ int wait_on_pending_writer(struct sock *sk, long *timeo)
 			break;
 		}
 
-		if (sk_wait_event(sk, timeo, !sk->sk_write_pending, &wait))
+		if (sk_wait_event(sk, timeo,
+				  !READ_ONCE(sk->sk_write_pending), &wait))
 			break;
 	}
 	remove_wait_queue(sk_sleep(sk), &wait);
@@ -107,7 +125,10 @@ int tls_push_sg(struct sock *sk,
 		u16 first_offset,
 		int flags)
 {
-	int sendpage_flags = flags | MSG_SENDPAGE_NOTLAST;
+	struct bio_vec bvec;
+	struct msghdr msg = {
+		.msg_flags = MSG_SPLICE_PAGES | flags,
+	};
 	int ret = 0;
 	struct page *p;
 	size_t size;
@@ -116,16 +137,19 @@ int tls_push_sg(struct sock *sk,
 	size = sg->length - offset;
 	offset += sg->offset;
 
-	ctx->in_tcp_sendpages = true;
+	ctx->splicing_pages = true;
 	while (1) {
 		if (sg_is_last(sg))
-			sendpage_flags = flags;
+			msg.msg_flags = flags;
 
 		/* is sending application-limited? */
 		tcp_rate_check_app_limited(sk);
 		p = sg_page(sg);
 retry:
-		ret = do_tcp_sendpages(sk, p, offset, size, sendpage_flags);
+		bvec_set_page(&bvec, p, size, offset);
+		iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, size);
+
+		ret = tcp_sendmsg_locked(sk, &msg, size);
 
 		if (ret != size) {
 			if (ret > 0) {
@@ -137,7 +161,7 @@ retry:
 			offset -= sg->offset;
 			ctx->partially_sent_offset = offset;
 			ctx->partially_sent_record = (void *)sg;
-			ctx->in_tcp_sendpages = false;
+			ctx->splicing_pages = false;
 			return ret;
 		}
 
@@ -151,7 +175,7 @@ retry:
 		size = sg->length;
 	}
 
-	ctx->in_tcp_sendpages = false;
+	ctx->splicing_pages = false;
 
 	return 0;
 }
@@ -229,11 +253,11 @@ static void tls_write_space(struct sock *sk)
 {
 	struct tls_context *ctx = tls_get_ctx(sk);
 
-	/* If in_tcp_sendpages call lower protocol write space handler
+	/* If splicing_pages call lower protocol write space handler
 	 * to ensure we wake up any waiting operations there. For example
-	 * if do_tcp_sendpages where to call sk_wait_event.
+	 * if splicing pages where to call sk_wait_event.
 	 */
-	if (ctx->in_tcp_sendpages) {
+	if (ctx->splicing_pages) {
 		ctx->sk_write_space(sk);
 		return;
 	}
@@ -334,6 +358,39 @@ static void tls_sk_proto_close(struct sock *sk, long timeout)
 		tls_ctx_free(sk, ctx);
 }
 
+static __poll_t tls_sk_poll(struct file *file, struct socket *sock,
+			    struct poll_table_struct *wait)
+{
+	struct tls_sw_context_rx *ctx;
+	struct tls_context *tls_ctx;
+	struct sock *sk = sock->sk;
+	struct sk_psock *psock;
+	__poll_t mask = 0;
+	u8 shutdown;
+	int state;
+
+	mask = tcp_poll(file, sock, wait);
+
+	state = inet_sk_state_load(sk);
+	shutdown = READ_ONCE(sk->sk_shutdown);
+	if (unlikely(state != TCP_ESTABLISHED || shutdown & RCV_SHUTDOWN))
+		return mask;
+
+	tls_ctx = tls_get_ctx(sk);
+	ctx = tls_sw_ctx_rx(tls_ctx);
+	psock = sk_psock_get(sk);
+
+	if (skb_queue_empty_lockless(&ctx->rx_list) &&
+	    !tls_strp_msg_ready(ctx) &&
+	    sk_psock_queue_empty(psock))
+		mask &= ~(EPOLLIN | EPOLLRDNORM);
+
+	if (psock)
+		sk_psock_put(sk, psock);
+
+	return mask;
+}
+
 static int do_tls_getsockopt_conf(struct sock *sk, char __user *optval,
 				  int __user *optlen, int tx)
 {
@@ -388,13 +445,11 @@ static int do_tls_getsockopt_conf(struct sock *sk, char __user *optval,
 			rc = -EINVAL;
 			goto out;
 		}
-		lock_sock(sk);
 		memcpy(crypto_info_aes_gcm_128->iv,
 		       cctx->iv + TLS_CIPHER_AES_GCM_128_SALT_SIZE,
 		       TLS_CIPHER_AES_GCM_128_IV_SIZE);
 		memcpy(crypto_info_aes_gcm_128->rec_seq, cctx->rec_seq,
 		       TLS_CIPHER_AES_GCM_128_REC_SEQ_SIZE);
-		release_sock(sk);
 		if (copy_to_user(optval,
 				 crypto_info_aes_gcm_128,
 				 sizeof(*crypto_info_aes_gcm_128)))
@@ -412,13 +467,11 @@ static int do_tls_getsockopt_conf(struct sock *sk, char __user *optval,
 			rc = -EINVAL;
 			goto out;
 		}
-		lock_sock(sk);
 		memcpy(crypto_info_aes_gcm_256->iv,
 		       cctx->iv + TLS_CIPHER_AES_GCM_256_SALT_SIZE,
 		       TLS_CIPHER_AES_GCM_256_IV_SIZE);
 		memcpy(crypto_info_aes_gcm_256->rec_seq, cctx->rec_seq,
 		       TLS_CIPHER_AES_GCM_256_REC_SEQ_SIZE);
-		release_sock(sk);
 		if (copy_to_user(optval,
 				 crypto_info_aes_gcm_256,
 				 sizeof(*crypto_info_aes_gcm_256)))
@@ -434,13 +487,11 @@ static int do_tls_getsockopt_conf(struct sock *sk, char __user *optval,
 			rc = -EINVAL;
 			goto out;
 		}
-		lock_sock(sk);
 		memcpy(aes_ccm_128->iv,
 		       cctx->iv + TLS_CIPHER_AES_CCM_128_SALT_SIZE,
 		       TLS_CIPHER_AES_CCM_128_IV_SIZE);
 		memcpy(aes_ccm_128->rec_seq, cctx->rec_seq,
 		       TLS_CIPHER_AES_CCM_128_REC_SEQ_SIZE);
-		release_sock(sk);
 		if (copy_to_user(optval, aes_ccm_128, sizeof(*aes_ccm_128)))
 			rc = -EFAULT;
 		break;
@@ -455,13 +506,11 @@ static int do_tls_getsockopt_conf(struct sock *sk, char __user *optval,
 			rc = -EINVAL;
 			goto out;
 		}
-		lock_sock(sk);
 		memcpy(chacha20_poly1305->iv,
 		       cctx->iv + TLS_CIPHER_CHACHA20_POLY1305_SALT_SIZE,
 		       TLS_CIPHER_CHACHA20_POLY1305_IV_SIZE);
 		memcpy(chacha20_poly1305->rec_seq, cctx->rec_seq,
 		       TLS_CIPHER_CHACHA20_POLY1305_REC_SEQ_SIZE);
-		release_sock(sk);
 		if (copy_to_user(optval, chacha20_poly1305,
 				sizeof(*chacha20_poly1305)))
 			rc = -EFAULT;
@@ -476,13 +525,11 @@ static int do_tls_getsockopt_conf(struct sock *sk, char __user *optval,
 			rc = -EINVAL;
 			goto out;
 		}
-		lock_sock(sk);
 		memcpy(sm4_gcm_info->iv,
 		       cctx->iv + TLS_CIPHER_SM4_GCM_SALT_SIZE,
 		       TLS_CIPHER_SM4_GCM_IV_SIZE);
 		memcpy(sm4_gcm_info->rec_seq, cctx->rec_seq,
 		       TLS_CIPHER_SM4_GCM_REC_SEQ_SIZE);
-		release_sock(sk);
 		if (copy_to_user(optval, sm4_gcm_info, sizeof(*sm4_gcm_info)))
 			rc = -EFAULT;
 		break;
@@ -496,14 +543,56 @@ static int do_tls_getsockopt_conf(struct sock *sk, char __user *optval,
 			rc = -EINVAL;
 			goto out;
 		}
-		lock_sock(sk);
 		memcpy(sm4_ccm_info->iv,
 		       cctx->iv + TLS_CIPHER_SM4_CCM_SALT_SIZE,
 		       TLS_CIPHER_SM4_CCM_IV_SIZE);
 		memcpy(sm4_ccm_info->rec_seq, cctx->rec_seq,
 		       TLS_CIPHER_SM4_CCM_REC_SEQ_SIZE);
-		release_sock(sk);
 		if (copy_to_user(optval, sm4_ccm_info, sizeof(*sm4_ccm_info)))
+			rc = -EFAULT;
+		break;
+	}
+	case TLS_CIPHER_ARIA_GCM_128: {
+		struct tls12_crypto_info_aria_gcm_128 *
+		  crypto_info_aria_gcm_128 =
+		  container_of(crypto_info,
+			       struct tls12_crypto_info_aria_gcm_128,
+			       info);
+
+		if (len != sizeof(*crypto_info_aria_gcm_128)) {
+			rc = -EINVAL;
+			goto out;
+		}
+		memcpy(crypto_info_aria_gcm_128->iv,
+		       cctx->iv + TLS_CIPHER_ARIA_GCM_128_SALT_SIZE,
+		       TLS_CIPHER_ARIA_GCM_128_IV_SIZE);
+		memcpy(crypto_info_aria_gcm_128->rec_seq, cctx->rec_seq,
+		       TLS_CIPHER_ARIA_GCM_128_REC_SEQ_SIZE);
+		if (copy_to_user(optval,
+				 crypto_info_aria_gcm_128,
+				 sizeof(*crypto_info_aria_gcm_128)))
+			rc = -EFAULT;
+		break;
+	}
+	case TLS_CIPHER_ARIA_GCM_256: {
+		struct tls12_crypto_info_aria_gcm_256 *
+		  crypto_info_aria_gcm_256 =
+		  container_of(crypto_info,
+			       struct tls12_crypto_info_aria_gcm_256,
+			       info);
+
+		if (len != sizeof(*crypto_info_aria_gcm_256)) {
+			rc = -EINVAL;
+			goto out;
+		}
+		memcpy(crypto_info_aria_gcm_256->iv,
+		       cctx->iv + TLS_CIPHER_ARIA_GCM_256_SALT_SIZE,
+		       TLS_CIPHER_ARIA_GCM_256_IV_SIZE);
+		memcpy(crypto_info_aria_gcm_256->rec_seq, cctx->rec_seq,
+		       TLS_CIPHER_ARIA_GCM_256_REC_SEQ_SIZE);
+		if (copy_to_user(optval,
+				 crypto_info_aria_gcm_256,
+				 sizeof(*crypto_info_aria_gcm_256)))
 			rc = -EFAULT;
 		break;
 	}
@@ -549,11 +638,9 @@ static int do_tls_getsockopt_no_pad(struct sock *sk, char __user *optval,
 	if (len < sizeof(value))
 		return -EINVAL;
 
-	lock_sock(sk);
 	value = -EINVAL;
 	if (ctx->rx_conf == TLS_SW || ctx->rx_conf == TLS_HW)
 		value = ctx->rx_no_pad;
-	release_sock(sk);
 	if (value < 0)
 		return value;
 
@@ -569,6 +656,8 @@ static int do_tls_getsockopt(struct sock *sk, int optname,
 			     char __user *optval, int __user *optlen)
 {
 	int rc = 0;
+
+	lock_sock(sk);
 
 	switch (optname) {
 	case TLS_TX:
@@ -586,6 +675,9 @@ static int do_tls_getsockopt(struct sock *sk, int optname,
 		rc = -ENOPROTOOPT;
 		break;
 	}
+
+	release_sock(sk);
+
 	return rc;
 }
 
@@ -667,6 +759,20 @@ static int do_tls_setsockopt_conf(struct sock *sk, sockptr_t optval,
 		break;
 	case TLS_CIPHER_SM4_CCM:
 		optsize = sizeof(struct tls12_crypto_info_sm4_ccm);
+		break;
+	case TLS_CIPHER_ARIA_GCM_128:
+		if (crypto_info->version != TLS_1_2_VERSION) {
+			rc = -EINVAL;
+			goto err_crypto_info;
+		}
+		optsize = sizeof(struct tls12_crypto_info_aria_gcm_128);
+		break;
+	case TLS_CIPHER_ARIA_GCM_256:
+		if (crypto_info->version != TLS_1_2_VERSION) {
+			rc = -EINVAL;
+			goto err_crypto_info;
+		}
+		optsize = sizeof(struct tls12_crypto_info_aria_gcm_256);
 		break;
 	default:
 		rc = -EINVAL;
@@ -851,27 +957,26 @@ static void build_proto_ops(struct proto_ops ops[TLS_NUM_CONFIG][TLS_NUM_CONFIG]
 	ops[TLS_BASE][TLS_BASE] = *base;
 
 	ops[TLS_SW  ][TLS_BASE] = ops[TLS_BASE][TLS_BASE];
-	ops[TLS_SW  ][TLS_BASE].sendpage_locked	= tls_sw_sendpage_locked;
+	ops[TLS_SW  ][TLS_BASE].splice_eof	= tls_sw_splice_eof;
 
 	ops[TLS_BASE][TLS_SW  ] = ops[TLS_BASE][TLS_BASE];
 	ops[TLS_BASE][TLS_SW  ].splice_read	= tls_sw_splice_read;
+	ops[TLS_BASE][TLS_SW  ].poll		= tls_sk_poll;
 
 	ops[TLS_SW  ][TLS_SW  ] = ops[TLS_SW  ][TLS_BASE];
 	ops[TLS_SW  ][TLS_SW  ].splice_read	= tls_sw_splice_read;
+	ops[TLS_SW  ][TLS_SW  ].poll		= tls_sk_poll;
 
 #ifdef CONFIG_TLS_DEVICE
 	ops[TLS_HW  ][TLS_BASE] = ops[TLS_BASE][TLS_BASE];
-	ops[TLS_HW  ][TLS_BASE].sendpage_locked	= NULL;
 
 	ops[TLS_HW  ][TLS_SW  ] = ops[TLS_BASE][TLS_SW  ];
-	ops[TLS_HW  ][TLS_SW  ].sendpage_locked	= NULL;
 
 	ops[TLS_BASE][TLS_HW  ] = ops[TLS_BASE][TLS_SW  ];
 
 	ops[TLS_SW  ][TLS_HW  ] = ops[TLS_SW  ][TLS_SW  ];
 
 	ops[TLS_HW  ][TLS_HW  ] = ops[TLS_HW  ][TLS_SW  ];
-	ops[TLS_HW  ][TLS_HW  ].sendpage_locked	= NULL;
 #endif
 #ifdef CONFIG_TLS_TOE
 	ops[TLS_HW_RECORD][TLS_HW_RECORD] = *base;
@@ -919,7 +1024,7 @@ static void build_protos(struct proto prot[TLS_NUM_CONFIG][TLS_NUM_CONFIG],
 
 	prot[TLS_SW][TLS_BASE] = prot[TLS_BASE][TLS_BASE];
 	prot[TLS_SW][TLS_BASE].sendmsg		= tls_sw_sendmsg;
-	prot[TLS_SW][TLS_BASE].sendpage		= tls_sw_sendpage;
+	prot[TLS_SW][TLS_BASE].splice_eof	= tls_sw_splice_eof;
 
 	prot[TLS_BASE][TLS_SW] = prot[TLS_BASE][TLS_BASE];
 	prot[TLS_BASE][TLS_SW].recvmsg		  = tls_sw_recvmsg;
@@ -934,11 +1039,11 @@ static void build_protos(struct proto prot[TLS_NUM_CONFIG][TLS_NUM_CONFIG],
 #ifdef CONFIG_TLS_DEVICE
 	prot[TLS_HW][TLS_BASE] = prot[TLS_BASE][TLS_BASE];
 	prot[TLS_HW][TLS_BASE].sendmsg		= tls_device_sendmsg;
-	prot[TLS_HW][TLS_BASE].sendpage		= tls_device_sendpage;
+	prot[TLS_HW][TLS_BASE].splice_eof	= tls_device_splice_eof;
 
 	prot[TLS_HW][TLS_SW] = prot[TLS_BASE][TLS_SW];
 	prot[TLS_HW][TLS_SW].sendmsg		= tls_device_sendmsg;
-	prot[TLS_HW][TLS_SW].sendpage		= tls_device_sendpage;
+	prot[TLS_HW][TLS_SW].splice_eof		= tls_device_splice_eof;
 
 	prot[TLS_BASE][TLS_HW] = prot[TLS_BASE][TLS_SW];
 

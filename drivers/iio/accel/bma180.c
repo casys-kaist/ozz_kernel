@@ -921,9 +921,9 @@ static const struct iio_trigger_ops bma180_trigger_ops = {
 	.reenable = bma180_trig_reen,
 };
 
-static int bma180_probe(struct i2c_client *client,
-		const struct i2c_device_id *id)
+static int bma180_probe(struct i2c_client *client)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(client);
 	struct device *dev = &client->dev;
 	struct bma180_data *data;
 	struct iio_dev *indio_dev;
@@ -1045,7 +1045,7 @@ err_disable_vdd:
 	return ret;
 }
 
-static int bma180_remove(struct i2c_client *client)
+static void bma180_remove(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct bma180_data *data = iio_priv(indio_dev);
@@ -1062,8 +1062,6 @@ static int bma180_remove(struct i2c_client *client)
 	mutex_unlock(&data->mutex);
 	regulator_disable(data->vddio_supply);
 	regulator_disable(data->vdd_supply);
-
-	return 0;
 }
 
 static int bma180_suspend(struct device *dev)

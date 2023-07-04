@@ -19,11 +19,6 @@
 
 #include "power.h"
 
-#ifndef CONFIG_SUSPEND
-suspend_state_t pm_suspend_target_state;
-#define pm_suspend_target_state	(PM_SUSPEND_ON)
-#endif
-
 #define list_for_each_entry_rcu_locked(pos, head, member) \
 	list_for_each_entry_rcu(pos, head, member, \
 		srcu_read_lock_held(&wakeup_srcu))
@@ -943,6 +938,8 @@ void pm_system_irq_wakeup(unsigned int irq_number)
 		wakeup_irq[1] = irq_number;
 	else
 		irq_number = 0;
+
+	pm_pr_dbg("Triggering wakeup from IRQ %d\n", irq_number);
 
 	raw_spin_unlock_irqrestore(&wakeup_irq_lock, flags);
 

@@ -425,8 +425,7 @@ static struct regmap_bus gp2ap002_regmap_bus = {
 	.reg_write = gp2ap002_regmap_i2c_write,
 };
 
-static int gp2ap002_probe(struct i2c_client *client,
-			  const struct i2c_device_id *id)
+static int gp2ap002_probe(struct i2c_client *client)
 {
 	struct gp2ap002 *gp2ap002;
 	struct iio_dev *indio_dev;
@@ -619,7 +618,7 @@ out_disable_vdd:
 	return ret;
 }
 
-static int gp2ap002_remove(struct i2c_client *client)
+static void gp2ap002_remove(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct gp2ap002 *gp2ap002 = iio_priv(indio_dev);
@@ -631,8 +630,6 @@ static int gp2ap002_remove(struct i2c_client *client)
 	iio_device_unregister(indio_dev);
 	regulator_disable(gp2ap002->vio);
 	regulator_disable(gp2ap002->vdd);
-
-	return 0;
 }
 
 static int gp2ap002_runtime_suspend(struct device *dev)

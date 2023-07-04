@@ -3,7 +3,7 @@
  * HE handling
  *
  * Copyright(c) 2017 Intel Deutschland GmbH
- * Copyright(c) 2019 - 2022 Intel Corporation
+ * Copyright(c) 2019 - 2023 Intel Corporation
  */
 
 #include "ieee80211_i.h"
@@ -31,24 +31,26 @@ ieee80211_update_from_he_6ghz_capa(const struct ieee80211_he_6ghz_capa *he_6ghz_
 			break;
 		}
 
-		sta->sta.smps_mode = smps_mode;
+		link_sta->pub->smps_mode = smps_mode;
 	} else {
-		sta->sta.smps_mode = IEEE80211_SMPS_OFF;
+		link_sta->pub->smps_mode = IEEE80211_SMPS_OFF;
 	}
 
 	switch (le16_get_bits(he_6ghz_capa->capa,
 			      IEEE80211_HE_6GHZ_CAP_MAX_MPDU_LEN)) {
 	case IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454:
-		sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_11454;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_11454;
 		break;
 	case IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991:
-		sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_7991;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_7991;
 		break;
 	case IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895:
 	default:
-		sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_3895;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_3895;
 		break;
 	}
+
+	ieee80211_sta_recalc_aggregates(&sta->sta);
 
 	link_sta->pub->he_6ghz_capa = *he_6ghz_capa;
 }
@@ -112,6 +114,7 @@ ieee80211_he_cap_ie_to_sta_he_cap(struct ieee80211_sub_if_data *sdata,
 				  struct link_sta_info *link_sta)
 {
 	struct ieee80211_sta_he_cap *he_cap = &link_sta->pub->he_cap;
+	const struct ieee80211_sta_he_cap *own_he_cap_ptr;
 	struct ieee80211_sta_he_cap own_he_cap;
 	struct ieee80211_he_cap_elem *he_cap_ie_elem = (void *)he_cap_ie;
 	u8 he_ppe_size;
@@ -121,12 +124,15 @@ ieee80211_he_cap_ie_to_sta_he_cap(struct ieee80211_sub_if_data *sdata,
 
 	memset(he_cap, 0, sizeof(*he_cap));
 
-	if (!he_cap_ie ||
-	    !ieee80211_get_he_iftype_cap(sband,
-					 ieee80211_vif_type_p2p(&sdata->vif)))
+	if (!he_cap_ie)
 		return;
 
-	own_he_cap = sband->iftype_data->he_cap;
+	own_he_cap_ptr =
+		ieee80211_get_he_iftype_cap_vif(sband, &sdata->vif);
+	if (!own_he_cap_ptr)
+		return;
+
+	own_he_cap = *own_he_cap_ptr;
 
 	/* Make sure size is OK */
 	mcs_nss_size = ieee80211_he_mcs_nss_size(he_cap_ie_elem);

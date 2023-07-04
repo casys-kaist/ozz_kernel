@@ -63,16 +63,17 @@ static int ksz_spi_probe(struct spi_device *spi)
 	else
 		regmap_config = ksz9477_regmap_config;
 
-	for (i = 0; i < ARRAY_SIZE(ksz8795_regmap_config); i++) {
+	for (i = 0; i < __KSZ_NUM_REGMAPS; i++) {
 		rc = regmap_config[i];
 		rc.lock_arg = &dev->regmap_mutex;
+		rc.wr_table = chip->wr_table;
+		rc.rd_table = chip->rd_table;
 		dev->regmap[i] = devm_regmap_init_spi(spi, &rc);
+
 		if (IS_ERR(dev->regmap[i])) {
-			ret = PTR_ERR(dev->regmap[i]);
-			dev_err(&spi->dev,
-				"Failed to initialize regmap%i: %d\n",
-				regmap_config[i].val_bits, ret);
-			return ret;
+			return dev_err_probe(&spi->dev, PTR_ERR(dev->regmap[i]),
+					     "Failed to initialize regmap%i\n",
+					     regmap_config[i].val_bits);
 		}
 	}
 
@@ -84,6 +85,8 @@ static int ksz_spi_probe(struct spi_device *spi)
 	ret = spi_setup(spi);
 	if (ret)
 		return ret;
+
+	dev->irq = spi->irq;
 
 	ret = ksz_switch_register(dev);
 
@@ -102,8 +105,6 @@ static void ksz_spi_remove(struct spi_device *spi)
 
 	if (dev)
 		ksz_switch_remove(dev);
-
-	spi_set_drvdata(spi, NULL);
 }
 
 static void ksz_spi_shutdown(struct spi_device *spi)
@@ -147,6 +148,10 @@ static const struct of_device_id ksz_dt_ids[] = {
 		.data = &ksz_switch_chips[KSZ9477]
 	},
 	{
+		.compatible = "microchip,ksz9896",
+		.data = &ksz_switch_chips[KSZ9896]
+	},
+	{
 		.compatible = "microchip,ksz9897",
 		.data = &ksz_switch_chips[KSZ9897]
 	},
@@ -156,11 +161,11 @@ static const struct of_device_id ksz_dt_ids[] = {
 	},
 	{
 		.compatible = "microchip,ksz9563",
-		.data = &ksz_switch_chips[KSZ9893]
+		.data = &ksz_switch_chips[KSZ9563]
 	},
 	{
 		.compatible = "microchip,ksz8563",
-		.data = &ksz_switch_chips[KSZ9893]
+		.data = &ksz_switch_chips[KSZ8563]
 	},
 	{
 		.compatible = "microchip,ksz9567",
@@ -197,6 +202,7 @@ static const struct spi_device_id ksz_spi_ids[] = {
 	{ "ksz8863" },
 	{ "ksz8873" },
 	{ "ksz9477" },
+	{ "ksz9896" },
 	{ "ksz9897" },
 	{ "ksz9893" },
 	{ "ksz9563" },
@@ -226,6 +232,7 @@ static struct spi_driver ksz_spi_driver = {
 module_spi_driver(ksz_spi_driver);
 
 MODULE_ALIAS("spi:ksz9477");
+MODULE_ALIAS("spi:ksz9896");
 MODULE_ALIAS("spi:ksz9897");
 MODULE_ALIAS("spi:ksz9893");
 MODULE_ALIAS("spi:ksz9563");

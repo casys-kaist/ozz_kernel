@@ -892,8 +892,11 @@ __SYSCALL(__NR_ssb_pso_writer, sys_ssb_pso_writer)
 #define __NR_ssb_pso_reader 502
 __SYSCALL(__NR_ssb_pso_reader, sys_ssb_pso_reader)
 
+#define __NR_cachestat 451
+__SYSCALL(__NR_cachestat, sys_cachestat)
+
 #undef __NR_syscalls
-#define __NR_syscalls 503
+#define __NR_syscalls 505
 
 /*
  * 32 bit systems traditionally used different

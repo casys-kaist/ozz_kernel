@@ -51,7 +51,7 @@ static void nft_osf_eval(const struct nft_expr *expr, struct nft_regs *regs,
 			snprintf(os_match, NFT_OSF_MAXGENRELEN, "%s:%s",
 				 data.genre, data.version);
 		else
-			strlcpy(os_match, data.genre, NFT_OSF_MAXGENRELEN);
+			strscpy(os_match, data.genre, NFT_OSF_MAXGENRELEN);
 
 		strncpy((char *)dest, os_match, NFT_OSF_MAXGENRELEN);
 	}
@@ -92,7 +92,8 @@ static int nft_osf_init(const struct nft_ctx *ctx,
 	return 0;
 }
 
-static int nft_osf_dump(struct sk_buff *skb, const struct nft_expr *expr)
+static int nft_osf_dump(struct sk_buff *skb,
+			const struct nft_expr *expr, bool reset)
 {
 	const struct nft_osf *priv = nft_expr_priv(expr);
 

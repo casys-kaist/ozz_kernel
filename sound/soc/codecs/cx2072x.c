@@ -1673,10 +1673,9 @@ static int cx2072x_i2c_probe(struct i2c_client *i2c)
 	return 0;
 }
 
-static int cx2072x_i2c_remove(struct i2c_client *i2c)
+static void cx2072x_i2c_remove(struct i2c_client *i2c)
 {
 	pm_runtime_disable(&i2c->dev);
-	return 0;
 }
 
 static const struct i2c_device_id cx2072x_i2c_id[] = {
@@ -1707,7 +1706,7 @@ static struct i2c_driver cx2072x_i2c_driver = {
 		.acpi_match_table = ACPI_PTR(cx2072x_acpi_match),
 		.pm = &cx2072x_runtime_pm,
 	},
-	.probe_new = cx2072x_i2c_probe,
+	.probe = cx2072x_i2c_probe,
 	.remove = cx2072x_i2c_remove,
 	.id_table = cx2072x_i2c_id,
 };

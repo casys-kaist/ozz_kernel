@@ -6,6 +6,7 @@
  */
 
 #include <linux/delay.h>
+#include <linux/dsa/ksz_common.h>
 #include <linux/export.h>
 #include <linux/gpio/consumer.h>
 #include <linux/kernel.h>
@@ -14,13 +15,19 @@
 #include <linux/phy.h>
 #include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
+#include <linux/if_vlan.h>
+#include <linux/irq.h>
+#include <linux/irqdomain.h>
+#include <linux/of_mdio.h>
 #include <linux/of_device.h>
 #include <linux/of_net.h>
 #include <linux/micrel_phy.h>
 #include <net/dsa.h>
+#include <net/pkt_cls.h>
 #include <net/switchdev.h>
 
 #include "ksz_common.h"
+#include "ksz_ptp.h"
 #include "ksz8.h"
 #include "ksz9477.h"
 #include "lan937x.h"
@@ -62,6 +69,43 @@ struct ksz_stats_raw {
 	u64 tx_mult_col;
 	u64 rx_total;
 	u64 tx_total;
+	u64 rx_discards;
+	u64 tx_discards;
+};
+
+struct ksz88xx_stats_raw {
+	u64 rx;
+	u64 rx_hi;
+	u64 rx_undersize;
+	u64 rx_fragments;
+	u64 rx_oversize;
+	u64 rx_jabbers;
+	u64 rx_symbol_err;
+	u64 rx_crc_err;
+	u64 rx_align_err;
+	u64 rx_mac_ctrl;
+	u64 rx_pause;
+	u64 rx_bcast;
+	u64 rx_mcast;
+	u64 rx_ucast;
+	u64 rx_64_or_less;
+	u64 rx_65_127;
+	u64 rx_128_255;
+	u64 rx_256_511;
+	u64 rx_512_1023;
+	u64 rx_1024_1522;
+	u64 tx;
+	u64 tx_hi;
+	u64 tx_late_col;
+	u64 tx_pause;
+	u64 tx_bcast;
+	u64 tx_mcast;
+	u64 tx_ucast;
+	u64 tx_deferred;
+	u64 tx_total_col;
+	u64 tx_exc_col;
+	u64 tx_single_col;
+	u64 tx_mult_col;
 	u64 rx_discards;
 	u64 tx_discards;
 };
@@ -152,9 +196,12 @@ static const struct ksz_dev_ops ksz8_dev_ops = {
 	.w_phy = ksz8_w_phy,
 	.r_mib_cnt = ksz8_r_mib_cnt,
 	.r_mib_pkt = ksz8_r_mib_pkt,
+	.r_mib_stat64 = ksz88xx_r_mib_stats64,
 	.freeze_mib = ksz8_freeze_mib,
 	.port_init_cnt = ksz8_port_init_cnt,
 	.fdb_dump = ksz8_fdb_dump,
+	.fdb_add = ksz8_fdb_add,
+	.fdb_del = ksz8_fdb_del,
 	.mdb_add = ksz8_mdb_add,
 	.mdb_del = ksz8_mdb_del,
 	.vlan_filtering = ksz8_port_vlan_filtering,
@@ -168,6 +215,7 @@ static const struct ksz_dev_ops ksz8_dev_ops = {
 	.reset = ksz8_reset_switch,
 	.init = ksz8_switch_init,
 	.exit = ksz8_switch_exit,
+	.change_mtu = ksz8_change_mtu,
 };
 
 static void ksz9477_phylink_mac_link_up(struct ksz_device *dev, int port,
@@ -183,6 +231,7 @@ static const struct ksz_dev_ops ksz9477_dev_ops = {
 	.cfg_port_member = ksz9477_cfg_port_member,
 	.flush_dyn_mac_table = ksz9477_flush_dyn_mac_table,
 	.port_setup = ksz9477_port_setup,
+	.set_ageing_time = ksz9477_set_ageing_time,
 	.r_phy = ksz9477_r_phy,
 	.w_phy = ksz9477_w_phy,
 	.r_mib_cnt = ksz9477_r_mib_cnt,
@@ -202,9 +251,9 @@ static const struct ksz_dev_ops ksz9477_dev_ops = {
 	.mdb_add = ksz9477_mdb_add,
 	.mdb_del = ksz9477_mdb_del,
 	.change_mtu = ksz9477_change_mtu,
-	.max_mtu = ksz9477_max_mtu,
 	.phylink_mac_link_up = ksz9477_phylink_mac_link_up,
 	.config_cpu_port = ksz9477_config_cpu_port,
+	.tc_cbs_set_cinc = ksz9477_tc_cbs_set_cinc,
 	.enable_stp_addr = ksz9477_enable_stp_addr,
 	.reset = ksz9477_reset_switch,
 	.init = ksz9477_switch_init,
@@ -213,10 +262,12 @@ static const struct ksz_dev_ops ksz9477_dev_ops = {
 
 static const struct ksz_dev_ops lan937x_dev_ops = {
 	.setup = lan937x_setup,
+	.teardown = lan937x_teardown,
 	.get_port_addr = ksz9477_get_port_addr,
 	.cfg_port_member = ksz9477_cfg_port_member,
 	.flush_dyn_mac_table = ksz9477_flush_dyn_mac_table,
 	.port_setup = lan937x_port_setup,
+	.set_ageing_time = lan937x_set_ageing_time,
 	.r_phy = lan937x_r_phy,
 	.w_phy = lan937x_w_phy,
 	.r_mib_cnt = ksz9477_r_mib_cnt,
@@ -237,9 +288,9 @@ static const struct ksz_dev_ops lan937x_dev_ops = {
 	.mdb_add = ksz9477_mdb_add,
 	.mdb_del = ksz9477_mdb_del,
 	.change_mtu = lan937x_change_mtu,
-	.max_mtu = ksz9477_max_mtu,
 	.phylink_mac_link_up = ksz9477_phylink_mac_link_up,
 	.config_cpu_port = lan937x_config_cpu_port,
+	.tc_cbs_set_cinc = lan937x_tc_cbs_set_cinc,
 	.enable_stp_addr = ksz9477_enable_stp_addr,
 	.reset = lan937x_reset_switch,
 	.init = lan937x_switch_init,
@@ -266,7 +317,7 @@ static const u16 ksz8795_regs[] = {
 	[S_BROADCAST_CTRL]		= 0x06,
 	[S_MULTICAST_CTRL]		= 0x04,
 	[P_XMII_CTRL_0]			= 0x06,
-	[P_XMII_CTRL_1]			= 0x56,
+	[P_XMII_CTRL_1]			= 0x06,
 };
 
 static const u32 ksz8795_masks[] = {
@@ -351,13 +402,13 @@ static const u32 ksz8863_masks[] = {
 	[VLAN_TABLE_VALID]		= BIT(19),
 	[STATIC_MAC_TABLE_VALID]	= BIT(19),
 	[STATIC_MAC_TABLE_USE_FID]	= BIT(21),
-	[STATIC_MAC_TABLE_FID]		= GENMASK(29, 26),
+	[STATIC_MAC_TABLE_FID]		= GENMASK(25, 22),
 	[STATIC_MAC_TABLE_OVERRIDE]	= BIT(20),
 	[STATIC_MAC_TABLE_FWD_PORTS]	= GENMASK(18, 16),
-	[DYNAMIC_MAC_TABLE_ENTRIES_H]	= GENMASK(5, 0),
-	[DYNAMIC_MAC_TABLE_MAC_EMPTY]	= BIT(7),
+	[DYNAMIC_MAC_TABLE_ENTRIES_H]	= GENMASK(1, 0),
+	[DYNAMIC_MAC_TABLE_MAC_EMPTY]	= BIT(2),
 	[DYNAMIC_MAC_TABLE_NOT_READY]	= BIT(7),
-	[DYNAMIC_MAC_TABLE_ENTRIES]	= GENMASK(31, 28),
+	[DYNAMIC_MAC_TABLE_ENTRIES]	= GENMASK(31, 24),
 	[DYNAMIC_MAC_TABLE_FID]		= GENMASK(19, 16),
 	[DYNAMIC_MAC_TABLE_SRC_PORT]	= GENMASK(21, 20),
 	[DYNAMIC_MAC_TABLE_TIMESTAMP]	= GENMASK(23, 22),
@@ -367,10 +418,10 @@ static u8 ksz8863_shifts[] = {
 	[VLAN_TABLE_MEMBERSHIP_S]	= 16,
 	[STATIC_MAC_FWD_PORTS]		= 16,
 	[STATIC_MAC_FID]		= 22,
-	[DYNAMIC_MAC_ENTRIES_H]		= 3,
+	[DYNAMIC_MAC_ENTRIES_H]		= 8,
 	[DYNAMIC_MAC_ENTRIES]		= 24,
 	[DYNAMIC_MAC_FID]		= 16,
-	[DYNAMIC_MAC_TIMESTAMP]		= 24,
+	[DYNAMIC_MAC_TIMESTAMP]		= 22,
 	[DYNAMIC_MAC_SRC_PORT]		= 20,
 };
 
@@ -421,7 +472,679 @@ static const u8 lan937x_shifts[] = {
 	[ALU_STAT_INDEX]		= 8,
 };
 
+static const struct regmap_range ksz8563_valid_regs[] = {
+	regmap_reg_range(0x0000, 0x0003),
+	regmap_reg_range(0x0006, 0x0006),
+	regmap_reg_range(0x000f, 0x001f),
+	regmap_reg_range(0x0100, 0x0100),
+	regmap_reg_range(0x0104, 0x0107),
+	regmap_reg_range(0x010d, 0x010d),
+	regmap_reg_range(0x0110, 0x0113),
+	regmap_reg_range(0x0120, 0x012b),
+	regmap_reg_range(0x0201, 0x0201),
+	regmap_reg_range(0x0210, 0x0213),
+	regmap_reg_range(0x0300, 0x0300),
+	regmap_reg_range(0x0302, 0x031b),
+	regmap_reg_range(0x0320, 0x032b),
+	regmap_reg_range(0x0330, 0x0336),
+	regmap_reg_range(0x0338, 0x033e),
+	regmap_reg_range(0x0340, 0x035f),
+	regmap_reg_range(0x0370, 0x0370),
+	regmap_reg_range(0x0378, 0x0378),
+	regmap_reg_range(0x037c, 0x037d),
+	regmap_reg_range(0x0390, 0x0393),
+	regmap_reg_range(0x0400, 0x040e),
+	regmap_reg_range(0x0410, 0x042f),
+	regmap_reg_range(0x0500, 0x0519),
+	regmap_reg_range(0x0520, 0x054b),
+	regmap_reg_range(0x0550, 0x05b3),
+
+	/* port 1 */
+	regmap_reg_range(0x1000, 0x1001),
+	regmap_reg_range(0x1004, 0x100b),
+	regmap_reg_range(0x1013, 0x1013),
+	regmap_reg_range(0x1017, 0x1017),
+	regmap_reg_range(0x101b, 0x101b),
+	regmap_reg_range(0x101f, 0x1021),
+	regmap_reg_range(0x1030, 0x1030),
+	regmap_reg_range(0x1100, 0x1111),
+	regmap_reg_range(0x111a, 0x111d),
+	regmap_reg_range(0x1122, 0x1127),
+	regmap_reg_range(0x112a, 0x112b),
+	regmap_reg_range(0x1136, 0x1139),
+	regmap_reg_range(0x113e, 0x113f),
+	regmap_reg_range(0x1400, 0x1401),
+	regmap_reg_range(0x1403, 0x1403),
+	regmap_reg_range(0x1410, 0x1417),
+	regmap_reg_range(0x1420, 0x1423),
+	regmap_reg_range(0x1500, 0x1507),
+	regmap_reg_range(0x1600, 0x1612),
+	regmap_reg_range(0x1800, 0x180f),
+	regmap_reg_range(0x1900, 0x1907),
+	regmap_reg_range(0x1914, 0x191b),
+	regmap_reg_range(0x1a00, 0x1a03),
+	regmap_reg_range(0x1a04, 0x1a08),
+	regmap_reg_range(0x1b00, 0x1b01),
+	regmap_reg_range(0x1b04, 0x1b04),
+	regmap_reg_range(0x1c00, 0x1c05),
+	regmap_reg_range(0x1c08, 0x1c1b),
+
+	/* port 2 */
+	regmap_reg_range(0x2000, 0x2001),
+	regmap_reg_range(0x2004, 0x200b),
+	regmap_reg_range(0x2013, 0x2013),
+	regmap_reg_range(0x2017, 0x2017),
+	regmap_reg_range(0x201b, 0x201b),
+	regmap_reg_range(0x201f, 0x2021),
+	regmap_reg_range(0x2030, 0x2030),
+	regmap_reg_range(0x2100, 0x2111),
+	regmap_reg_range(0x211a, 0x211d),
+	regmap_reg_range(0x2122, 0x2127),
+	regmap_reg_range(0x212a, 0x212b),
+	regmap_reg_range(0x2136, 0x2139),
+	regmap_reg_range(0x213e, 0x213f),
+	regmap_reg_range(0x2400, 0x2401),
+	regmap_reg_range(0x2403, 0x2403),
+	regmap_reg_range(0x2410, 0x2417),
+	regmap_reg_range(0x2420, 0x2423),
+	regmap_reg_range(0x2500, 0x2507),
+	regmap_reg_range(0x2600, 0x2612),
+	regmap_reg_range(0x2800, 0x280f),
+	regmap_reg_range(0x2900, 0x2907),
+	regmap_reg_range(0x2914, 0x291b),
+	regmap_reg_range(0x2a00, 0x2a03),
+	regmap_reg_range(0x2a04, 0x2a08),
+	regmap_reg_range(0x2b00, 0x2b01),
+	regmap_reg_range(0x2b04, 0x2b04),
+	regmap_reg_range(0x2c00, 0x2c05),
+	regmap_reg_range(0x2c08, 0x2c1b),
+
+	/* port 3 */
+	regmap_reg_range(0x3000, 0x3001),
+	regmap_reg_range(0x3004, 0x300b),
+	regmap_reg_range(0x3013, 0x3013),
+	regmap_reg_range(0x3017, 0x3017),
+	regmap_reg_range(0x301b, 0x301b),
+	regmap_reg_range(0x301f, 0x3021),
+	regmap_reg_range(0x3030, 0x3030),
+	regmap_reg_range(0x3300, 0x3301),
+	regmap_reg_range(0x3303, 0x3303),
+	regmap_reg_range(0x3400, 0x3401),
+	regmap_reg_range(0x3403, 0x3403),
+	regmap_reg_range(0x3410, 0x3417),
+	regmap_reg_range(0x3420, 0x3423),
+	regmap_reg_range(0x3500, 0x3507),
+	regmap_reg_range(0x3600, 0x3612),
+	regmap_reg_range(0x3800, 0x380f),
+	regmap_reg_range(0x3900, 0x3907),
+	regmap_reg_range(0x3914, 0x391b),
+	regmap_reg_range(0x3a00, 0x3a03),
+	regmap_reg_range(0x3a04, 0x3a08),
+	regmap_reg_range(0x3b00, 0x3b01),
+	regmap_reg_range(0x3b04, 0x3b04),
+	regmap_reg_range(0x3c00, 0x3c05),
+	regmap_reg_range(0x3c08, 0x3c1b),
+};
+
+static const struct regmap_access_table ksz8563_register_set = {
+	.yes_ranges = ksz8563_valid_regs,
+	.n_yes_ranges = ARRAY_SIZE(ksz8563_valid_regs),
+};
+
+static const struct regmap_range ksz9477_valid_regs[] = {
+	regmap_reg_range(0x0000, 0x0003),
+	regmap_reg_range(0x0006, 0x0006),
+	regmap_reg_range(0x0010, 0x001f),
+	regmap_reg_range(0x0100, 0x0100),
+	regmap_reg_range(0x0103, 0x0107),
+	regmap_reg_range(0x010d, 0x010d),
+	regmap_reg_range(0x0110, 0x0113),
+	regmap_reg_range(0x0120, 0x012b),
+	regmap_reg_range(0x0201, 0x0201),
+	regmap_reg_range(0x0210, 0x0213),
+	regmap_reg_range(0x0300, 0x0300),
+	regmap_reg_range(0x0302, 0x031b),
+	regmap_reg_range(0x0320, 0x032b),
+	regmap_reg_range(0x0330, 0x0336),
+	regmap_reg_range(0x0338, 0x033b),
+	regmap_reg_range(0x033e, 0x033e),
+	regmap_reg_range(0x0340, 0x035f),
+	regmap_reg_range(0x0370, 0x0370),
+	regmap_reg_range(0x0378, 0x0378),
+	regmap_reg_range(0x037c, 0x037d),
+	regmap_reg_range(0x0390, 0x0393),
+	regmap_reg_range(0x0400, 0x040e),
+	regmap_reg_range(0x0410, 0x042f),
+	regmap_reg_range(0x0444, 0x044b),
+	regmap_reg_range(0x0450, 0x046f),
+	regmap_reg_range(0x0500, 0x0519),
+	regmap_reg_range(0x0520, 0x054b),
+	regmap_reg_range(0x0550, 0x05b3),
+	regmap_reg_range(0x0604, 0x060b),
+	regmap_reg_range(0x0610, 0x0612),
+	regmap_reg_range(0x0614, 0x062c),
+	regmap_reg_range(0x0640, 0x0645),
+	regmap_reg_range(0x0648, 0x064d),
+
+	/* port 1 */
+	regmap_reg_range(0x1000, 0x1001),
+	regmap_reg_range(0x1013, 0x1013),
+	regmap_reg_range(0x1017, 0x1017),
+	regmap_reg_range(0x101b, 0x101b),
+	regmap_reg_range(0x101f, 0x1020),
+	regmap_reg_range(0x1030, 0x1030),
+	regmap_reg_range(0x1100, 0x1115),
+	regmap_reg_range(0x111a, 0x111f),
+	regmap_reg_range(0x1122, 0x1127),
+	regmap_reg_range(0x112a, 0x112b),
+	regmap_reg_range(0x1136, 0x1139),
+	regmap_reg_range(0x113e, 0x113f),
+	regmap_reg_range(0x1400, 0x1401),
+	regmap_reg_range(0x1403, 0x1403),
+	regmap_reg_range(0x1410, 0x1417),
+	regmap_reg_range(0x1420, 0x1423),
+	regmap_reg_range(0x1500, 0x1507),
+	regmap_reg_range(0x1600, 0x1613),
+	regmap_reg_range(0x1800, 0x180f),
+	regmap_reg_range(0x1820, 0x1827),
+	regmap_reg_range(0x1830, 0x1837),
+	regmap_reg_range(0x1840, 0x184b),
+	regmap_reg_range(0x1900, 0x1907),
+	regmap_reg_range(0x1914, 0x191b),
+	regmap_reg_range(0x1920, 0x1920),
+	regmap_reg_range(0x1923, 0x1927),
+	regmap_reg_range(0x1a00, 0x1a03),
+	regmap_reg_range(0x1a04, 0x1a07),
+	regmap_reg_range(0x1b00, 0x1b01),
+	regmap_reg_range(0x1b04, 0x1b04),
+	regmap_reg_range(0x1c00, 0x1c05),
+	regmap_reg_range(0x1c08, 0x1c1b),
+
+	/* port 2 */
+	regmap_reg_range(0x2000, 0x2001),
+	regmap_reg_range(0x2013, 0x2013),
+	regmap_reg_range(0x2017, 0x2017),
+	regmap_reg_range(0x201b, 0x201b),
+	regmap_reg_range(0x201f, 0x2020),
+	regmap_reg_range(0x2030, 0x2030),
+	regmap_reg_range(0x2100, 0x2115),
+	regmap_reg_range(0x211a, 0x211f),
+	regmap_reg_range(0x2122, 0x2127),
+	regmap_reg_range(0x212a, 0x212b),
+	regmap_reg_range(0x2136, 0x2139),
+	regmap_reg_range(0x213e, 0x213f),
+	regmap_reg_range(0x2400, 0x2401),
+	regmap_reg_range(0x2403, 0x2403),
+	regmap_reg_range(0x2410, 0x2417),
+	regmap_reg_range(0x2420, 0x2423),
+	regmap_reg_range(0x2500, 0x2507),
+	regmap_reg_range(0x2600, 0x2613),
+	regmap_reg_range(0x2800, 0x280f),
+	regmap_reg_range(0x2820, 0x2827),
+	regmap_reg_range(0x2830, 0x2837),
+	regmap_reg_range(0x2840, 0x284b),
+	regmap_reg_range(0x2900, 0x2907),
+	regmap_reg_range(0x2914, 0x291b),
+	regmap_reg_range(0x2920, 0x2920),
+	regmap_reg_range(0x2923, 0x2927),
+	regmap_reg_range(0x2a00, 0x2a03),
+	regmap_reg_range(0x2a04, 0x2a07),
+	regmap_reg_range(0x2b00, 0x2b01),
+	regmap_reg_range(0x2b04, 0x2b04),
+	regmap_reg_range(0x2c00, 0x2c05),
+	regmap_reg_range(0x2c08, 0x2c1b),
+
+	/* port 3 */
+	regmap_reg_range(0x3000, 0x3001),
+	regmap_reg_range(0x3013, 0x3013),
+	regmap_reg_range(0x3017, 0x3017),
+	regmap_reg_range(0x301b, 0x301b),
+	regmap_reg_range(0x301f, 0x3020),
+	regmap_reg_range(0x3030, 0x3030),
+	regmap_reg_range(0x3100, 0x3115),
+	regmap_reg_range(0x311a, 0x311f),
+	regmap_reg_range(0x3122, 0x3127),
+	regmap_reg_range(0x312a, 0x312b),
+	regmap_reg_range(0x3136, 0x3139),
+	regmap_reg_range(0x313e, 0x313f),
+	regmap_reg_range(0x3400, 0x3401),
+	regmap_reg_range(0x3403, 0x3403),
+	regmap_reg_range(0x3410, 0x3417),
+	regmap_reg_range(0x3420, 0x3423),
+	regmap_reg_range(0x3500, 0x3507),
+	regmap_reg_range(0x3600, 0x3613),
+	regmap_reg_range(0x3800, 0x380f),
+	regmap_reg_range(0x3820, 0x3827),
+	regmap_reg_range(0x3830, 0x3837),
+	regmap_reg_range(0x3840, 0x384b),
+	regmap_reg_range(0x3900, 0x3907),
+	regmap_reg_range(0x3914, 0x391b),
+	regmap_reg_range(0x3920, 0x3920),
+	regmap_reg_range(0x3923, 0x3927),
+	regmap_reg_range(0x3a00, 0x3a03),
+	regmap_reg_range(0x3a04, 0x3a07),
+	regmap_reg_range(0x3b00, 0x3b01),
+	regmap_reg_range(0x3b04, 0x3b04),
+	regmap_reg_range(0x3c00, 0x3c05),
+	regmap_reg_range(0x3c08, 0x3c1b),
+
+	/* port 4 */
+	regmap_reg_range(0x4000, 0x4001),
+	regmap_reg_range(0x4013, 0x4013),
+	regmap_reg_range(0x4017, 0x4017),
+	regmap_reg_range(0x401b, 0x401b),
+	regmap_reg_range(0x401f, 0x4020),
+	regmap_reg_range(0x4030, 0x4030),
+	regmap_reg_range(0x4100, 0x4115),
+	regmap_reg_range(0x411a, 0x411f),
+	regmap_reg_range(0x4122, 0x4127),
+	regmap_reg_range(0x412a, 0x412b),
+	regmap_reg_range(0x4136, 0x4139),
+	regmap_reg_range(0x413e, 0x413f),
+	regmap_reg_range(0x4400, 0x4401),
+	regmap_reg_range(0x4403, 0x4403),
+	regmap_reg_range(0x4410, 0x4417),
+	regmap_reg_range(0x4420, 0x4423),
+	regmap_reg_range(0x4500, 0x4507),
+	regmap_reg_range(0x4600, 0x4613),
+	regmap_reg_range(0x4800, 0x480f),
+	regmap_reg_range(0x4820, 0x4827),
+	regmap_reg_range(0x4830, 0x4837),
+	regmap_reg_range(0x4840, 0x484b),
+	regmap_reg_range(0x4900, 0x4907),
+	regmap_reg_range(0x4914, 0x491b),
+	regmap_reg_range(0x4920, 0x4920),
+	regmap_reg_range(0x4923, 0x4927),
+	regmap_reg_range(0x4a00, 0x4a03),
+	regmap_reg_range(0x4a04, 0x4a07),
+	regmap_reg_range(0x4b00, 0x4b01),
+	regmap_reg_range(0x4b04, 0x4b04),
+	regmap_reg_range(0x4c00, 0x4c05),
+	regmap_reg_range(0x4c08, 0x4c1b),
+
+	/* port 5 */
+	regmap_reg_range(0x5000, 0x5001),
+	regmap_reg_range(0x5013, 0x5013),
+	regmap_reg_range(0x5017, 0x5017),
+	regmap_reg_range(0x501b, 0x501b),
+	regmap_reg_range(0x501f, 0x5020),
+	regmap_reg_range(0x5030, 0x5030),
+	regmap_reg_range(0x5100, 0x5115),
+	regmap_reg_range(0x511a, 0x511f),
+	regmap_reg_range(0x5122, 0x5127),
+	regmap_reg_range(0x512a, 0x512b),
+	regmap_reg_range(0x5136, 0x5139),
+	regmap_reg_range(0x513e, 0x513f),
+	regmap_reg_range(0x5400, 0x5401),
+	regmap_reg_range(0x5403, 0x5403),
+	regmap_reg_range(0x5410, 0x5417),
+	regmap_reg_range(0x5420, 0x5423),
+	regmap_reg_range(0x5500, 0x5507),
+	regmap_reg_range(0x5600, 0x5613),
+	regmap_reg_range(0x5800, 0x580f),
+	regmap_reg_range(0x5820, 0x5827),
+	regmap_reg_range(0x5830, 0x5837),
+	regmap_reg_range(0x5840, 0x584b),
+	regmap_reg_range(0x5900, 0x5907),
+	regmap_reg_range(0x5914, 0x591b),
+	regmap_reg_range(0x5920, 0x5920),
+	regmap_reg_range(0x5923, 0x5927),
+	regmap_reg_range(0x5a00, 0x5a03),
+	regmap_reg_range(0x5a04, 0x5a07),
+	regmap_reg_range(0x5b00, 0x5b01),
+	regmap_reg_range(0x5b04, 0x5b04),
+	regmap_reg_range(0x5c00, 0x5c05),
+	regmap_reg_range(0x5c08, 0x5c1b),
+
+	/* port 6 */
+	regmap_reg_range(0x6000, 0x6001),
+	regmap_reg_range(0x6013, 0x6013),
+	regmap_reg_range(0x6017, 0x6017),
+	regmap_reg_range(0x601b, 0x601b),
+	regmap_reg_range(0x601f, 0x6020),
+	regmap_reg_range(0x6030, 0x6030),
+	regmap_reg_range(0x6300, 0x6301),
+	regmap_reg_range(0x6400, 0x6401),
+	regmap_reg_range(0x6403, 0x6403),
+	regmap_reg_range(0x6410, 0x6417),
+	regmap_reg_range(0x6420, 0x6423),
+	regmap_reg_range(0x6500, 0x6507),
+	regmap_reg_range(0x6600, 0x6613),
+	regmap_reg_range(0x6800, 0x680f),
+	regmap_reg_range(0x6820, 0x6827),
+	regmap_reg_range(0x6830, 0x6837),
+	regmap_reg_range(0x6840, 0x684b),
+	regmap_reg_range(0x6900, 0x6907),
+	regmap_reg_range(0x6914, 0x691b),
+	regmap_reg_range(0x6920, 0x6920),
+	regmap_reg_range(0x6923, 0x6927),
+	regmap_reg_range(0x6a00, 0x6a03),
+	regmap_reg_range(0x6a04, 0x6a07),
+	regmap_reg_range(0x6b00, 0x6b01),
+	regmap_reg_range(0x6b04, 0x6b04),
+	regmap_reg_range(0x6c00, 0x6c05),
+	regmap_reg_range(0x6c08, 0x6c1b),
+
+	/* port 7 */
+	regmap_reg_range(0x7000, 0x7001),
+	regmap_reg_range(0x7013, 0x7013),
+	regmap_reg_range(0x7017, 0x7017),
+	regmap_reg_range(0x701b, 0x701b),
+	regmap_reg_range(0x701f, 0x7020),
+	regmap_reg_range(0x7030, 0x7030),
+	regmap_reg_range(0x7200, 0x7203),
+	regmap_reg_range(0x7206, 0x7207),
+	regmap_reg_range(0x7300, 0x7301),
+	regmap_reg_range(0x7400, 0x7401),
+	regmap_reg_range(0x7403, 0x7403),
+	regmap_reg_range(0x7410, 0x7417),
+	regmap_reg_range(0x7420, 0x7423),
+	regmap_reg_range(0x7500, 0x7507),
+	regmap_reg_range(0x7600, 0x7613),
+	regmap_reg_range(0x7800, 0x780f),
+	regmap_reg_range(0x7820, 0x7827),
+	regmap_reg_range(0x7830, 0x7837),
+	regmap_reg_range(0x7840, 0x784b),
+	regmap_reg_range(0x7900, 0x7907),
+	regmap_reg_range(0x7914, 0x791b),
+	regmap_reg_range(0x7920, 0x7920),
+	regmap_reg_range(0x7923, 0x7927),
+	regmap_reg_range(0x7a00, 0x7a03),
+	regmap_reg_range(0x7a04, 0x7a07),
+	regmap_reg_range(0x7b00, 0x7b01),
+	regmap_reg_range(0x7b04, 0x7b04),
+	regmap_reg_range(0x7c00, 0x7c05),
+	regmap_reg_range(0x7c08, 0x7c1b),
+};
+
+static const struct regmap_access_table ksz9477_register_set = {
+	.yes_ranges = ksz9477_valid_regs,
+	.n_yes_ranges = ARRAY_SIZE(ksz9477_valid_regs),
+};
+
+static const struct regmap_range ksz9896_valid_regs[] = {
+	regmap_reg_range(0x0000, 0x0003),
+	regmap_reg_range(0x0006, 0x0006),
+	regmap_reg_range(0x0010, 0x001f),
+	regmap_reg_range(0x0100, 0x0100),
+	regmap_reg_range(0x0103, 0x0107),
+	regmap_reg_range(0x010d, 0x010d),
+	regmap_reg_range(0x0110, 0x0113),
+	regmap_reg_range(0x0120, 0x0127),
+	regmap_reg_range(0x0201, 0x0201),
+	regmap_reg_range(0x0210, 0x0213),
+	regmap_reg_range(0x0300, 0x0300),
+	regmap_reg_range(0x0302, 0x030b),
+	regmap_reg_range(0x0310, 0x031b),
+	regmap_reg_range(0x0320, 0x032b),
+	regmap_reg_range(0x0330, 0x0336),
+	regmap_reg_range(0x0338, 0x033b),
+	regmap_reg_range(0x033e, 0x033e),
+	regmap_reg_range(0x0340, 0x035f),
+	regmap_reg_range(0x0370, 0x0370),
+	regmap_reg_range(0x0378, 0x0378),
+	regmap_reg_range(0x037c, 0x037d),
+	regmap_reg_range(0x0390, 0x0393),
+	regmap_reg_range(0x0400, 0x040e),
+	regmap_reg_range(0x0410, 0x042f),
+
+	/* port 1 */
+	regmap_reg_range(0x1000, 0x1001),
+	regmap_reg_range(0x1013, 0x1013),
+	regmap_reg_range(0x1017, 0x1017),
+	regmap_reg_range(0x101b, 0x101b),
+	regmap_reg_range(0x101f, 0x1020),
+	regmap_reg_range(0x1030, 0x1030),
+	regmap_reg_range(0x1100, 0x1115),
+	regmap_reg_range(0x111a, 0x111f),
+	regmap_reg_range(0x1122, 0x1127),
+	regmap_reg_range(0x112a, 0x112b),
+	regmap_reg_range(0x1136, 0x1139),
+	regmap_reg_range(0x113e, 0x113f),
+	regmap_reg_range(0x1400, 0x1401),
+	regmap_reg_range(0x1403, 0x1403),
+	regmap_reg_range(0x1410, 0x1417),
+	regmap_reg_range(0x1420, 0x1423),
+	regmap_reg_range(0x1500, 0x1507),
+	regmap_reg_range(0x1600, 0x1612),
+	regmap_reg_range(0x1800, 0x180f),
+	regmap_reg_range(0x1820, 0x1827),
+	regmap_reg_range(0x1830, 0x1837),
+	regmap_reg_range(0x1840, 0x184b),
+	regmap_reg_range(0x1900, 0x1907),
+	regmap_reg_range(0x1914, 0x1915),
+	regmap_reg_range(0x1a00, 0x1a03),
+	regmap_reg_range(0x1a04, 0x1a07),
+	regmap_reg_range(0x1b00, 0x1b01),
+	regmap_reg_range(0x1b04, 0x1b04),
+
+	/* port 2 */
+	regmap_reg_range(0x2000, 0x2001),
+	regmap_reg_range(0x2013, 0x2013),
+	regmap_reg_range(0x2017, 0x2017),
+	regmap_reg_range(0x201b, 0x201b),
+	regmap_reg_range(0x201f, 0x2020),
+	regmap_reg_range(0x2030, 0x2030),
+	regmap_reg_range(0x2100, 0x2115),
+	regmap_reg_range(0x211a, 0x211f),
+	regmap_reg_range(0x2122, 0x2127),
+	regmap_reg_range(0x212a, 0x212b),
+	regmap_reg_range(0x2136, 0x2139),
+	regmap_reg_range(0x213e, 0x213f),
+	regmap_reg_range(0x2400, 0x2401),
+	regmap_reg_range(0x2403, 0x2403),
+	regmap_reg_range(0x2410, 0x2417),
+	regmap_reg_range(0x2420, 0x2423),
+	regmap_reg_range(0x2500, 0x2507),
+	regmap_reg_range(0x2600, 0x2612),
+	regmap_reg_range(0x2800, 0x280f),
+	regmap_reg_range(0x2820, 0x2827),
+	regmap_reg_range(0x2830, 0x2837),
+	regmap_reg_range(0x2840, 0x284b),
+	regmap_reg_range(0x2900, 0x2907),
+	regmap_reg_range(0x2914, 0x2915),
+	regmap_reg_range(0x2a00, 0x2a03),
+	regmap_reg_range(0x2a04, 0x2a07),
+	regmap_reg_range(0x2b00, 0x2b01),
+	regmap_reg_range(0x2b04, 0x2b04),
+
+	/* port 3 */
+	regmap_reg_range(0x3000, 0x3001),
+	regmap_reg_range(0x3013, 0x3013),
+	regmap_reg_range(0x3017, 0x3017),
+	regmap_reg_range(0x301b, 0x301b),
+	regmap_reg_range(0x301f, 0x3020),
+	regmap_reg_range(0x3030, 0x3030),
+	regmap_reg_range(0x3100, 0x3115),
+	regmap_reg_range(0x311a, 0x311f),
+	regmap_reg_range(0x3122, 0x3127),
+	regmap_reg_range(0x312a, 0x312b),
+	regmap_reg_range(0x3136, 0x3139),
+	regmap_reg_range(0x313e, 0x313f),
+	regmap_reg_range(0x3400, 0x3401),
+	regmap_reg_range(0x3403, 0x3403),
+	regmap_reg_range(0x3410, 0x3417),
+	regmap_reg_range(0x3420, 0x3423),
+	regmap_reg_range(0x3500, 0x3507),
+	regmap_reg_range(0x3600, 0x3612),
+	regmap_reg_range(0x3800, 0x380f),
+	regmap_reg_range(0x3820, 0x3827),
+	regmap_reg_range(0x3830, 0x3837),
+	regmap_reg_range(0x3840, 0x384b),
+	regmap_reg_range(0x3900, 0x3907),
+	regmap_reg_range(0x3914, 0x3915),
+	regmap_reg_range(0x3a00, 0x3a03),
+	regmap_reg_range(0x3a04, 0x3a07),
+	regmap_reg_range(0x3b00, 0x3b01),
+	regmap_reg_range(0x3b04, 0x3b04),
+
+	/* port 4 */
+	regmap_reg_range(0x4000, 0x4001),
+	regmap_reg_range(0x4013, 0x4013),
+	regmap_reg_range(0x4017, 0x4017),
+	regmap_reg_range(0x401b, 0x401b),
+	regmap_reg_range(0x401f, 0x4020),
+	regmap_reg_range(0x4030, 0x4030),
+	regmap_reg_range(0x4100, 0x4115),
+	regmap_reg_range(0x411a, 0x411f),
+	regmap_reg_range(0x4122, 0x4127),
+	regmap_reg_range(0x412a, 0x412b),
+	regmap_reg_range(0x4136, 0x4139),
+	regmap_reg_range(0x413e, 0x413f),
+	regmap_reg_range(0x4400, 0x4401),
+	regmap_reg_range(0x4403, 0x4403),
+	regmap_reg_range(0x4410, 0x4417),
+	regmap_reg_range(0x4420, 0x4423),
+	regmap_reg_range(0x4500, 0x4507),
+	regmap_reg_range(0x4600, 0x4612),
+	regmap_reg_range(0x4800, 0x480f),
+	regmap_reg_range(0x4820, 0x4827),
+	regmap_reg_range(0x4830, 0x4837),
+	regmap_reg_range(0x4840, 0x484b),
+	regmap_reg_range(0x4900, 0x4907),
+	regmap_reg_range(0x4914, 0x4915),
+	regmap_reg_range(0x4a00, 0x4a03),
+	regmap_reg_range(0x4a04, 0x4a07),
+	regmap_reg_range(0x4b00, 0x4b01),
+	regmap_reg_range(0x4b04, 0x4b04),
+
+	/* port 5 */
+	regmap_reg_range(0x5000, 0x5001),
+	regmap_reg_range(0x5013, 0x5013),
+	regmap_reg_range(0x5017, 0x5017),
+	regmap_reg_range(0x501b, 0x501b),
+	regmap_reg_range(0x501f, 0x5020),
+	regmap_reg_range(0x5030, 0x5030),
+	regmap_reg_range(0x5100, 0x5115),
+	regmap_reg_range(0x511a, 0x511f),
+	regmap_reg_range(0x5122, 0x5127),
+	regmap_reg_range(0x512a, 0x512b),
+	regmap_reg_range(0x5136, 0x5139),
+	regmap_reg_range(0x513e, 0x513f),
+	regmap_reg_range(0x5400, 0x5401),
+	regmap_reg_range(0x5403, 0x5403),
+	regmap_reg_range(0x5410, 0x5417),
+	regmap_reg_range(0x5420, 0x5423),
+	regmap_reg_range(0x5500, 0x5507),
+	regmap_reg_range(0x5600, 0x5612),
+	regmap_reg_range(0x5800, 0x580f),
+	regmap_reg_range(0x5820, 0x5827),
+	regmap_reg_range(0x5830, 0x5837),
+	regmap_reg_range(0x5840, 0x584b),
+	regmap_reg_range(0x5900, 0x5907),
+	regmap_reg_range(0x5914, 0x5915),
+	regmap_reg_range(0x5a00, 0x5a03),
+	regmap_reg_range(0x5a04, 0x5a07),
+	regmap_reg_range(0x5b00, 0x5b01),
+	regmap_reg_range(0x5b04, 0x5b04),
+
+	/* port 6 */
+	regmap_reg_range(0x6000, 0x6001),
+	regmap_reg_range(0x6013, 0x6013),
+	regmap_reg_range(0x6017, 0x6017),
+	regmap_reg_range(0x601b, 0x601b),
+	regmap_reg_range(0x601f, 0x6020),
+	regmap_reg_range(0x6030, 0x6030),
+	regmap_reg_range(0x6100, 0x6115),
+	regmap_reg_range(0x611a, 0x611f),
+	regmap_reg_range(0x6122, 0x6127),
+	regmap_reg_range(0x612a, 0x612b),
+	regmap_reg_range(0x6136, 0x6139),
+	regmap_reg_range(0x613e, 0x613f),
+	regmap_reg_range(0x6300, 0x6301),
+	regmap_reg_range(0x6400, 0x6401),
+	regmap_reg_range(0x6403, 0x6403),
+	regmap_reg_range(0x6410, 0x6417),
+	regmap_reg_range(0x6420, 0x6423),
+	regmap_reg_range(0x6500, 0x6507),
+	regmap_reg_range(0x6600, 0x6612),
+	regmap_reg_range(0x6800, 0x680f),
+	regmap_reg_range(0x6820, 0x6827),
+	regmap_reg_range(0x6830, 0x6837),
+	regmap_reg_range(0x6840, 0x684b),
+	regmap_reg_range(0x6900, 0x6907),
+	regmap_reg_range(0x6914, 0x6915),
+	regmap_reg_range(0x6a00, 0x6a03),
+	regmap_reg_range(0x6a04, 0x6a07),
+	regmap_reg_range(0x6b00, 0x6b01),
+	regmap_reg_range(0x6b04, 0x6b04),
+};
+
+static const struct regmap_access_table ksz9896_register_set = {
+	.yes_ranges = ksz9896_valid_regs,
+	.n_yes_ranges = ARRAY_SIZE(ksz9896_valid_regs),
+};
+
+static const struct regmap_range ksz8873_valid_regs[] = {
+	regmap_reg_range(0x00, 0x01),
+	/* global control register */
+	regmap_reg_range(0x02, 0x0f),
+
+	/* port registers */
+	regmap_reg_range(0x10, 0x1d),
+	regmap_reg_range(0x1e, 0x1f),
+	regmap_reg_range(0x20, 0x2d),
+	regmap_reg_range(0x2e, 0x2f),
+	regmap_reg_range(0x30, 0x39),
+	regmap_reg_range(0x3f, 0x3f),
+
+	/* advanced control registers */
+	regmap_reg_range(0x60, 0x6f),
+	regmap_reg_range(0x70, 0x75),
+	regmap_reg_range(0x76, 0x78),
+	regmap_reg_range(0x79, 0x7a),
+	regmap_reg_range(0x7b, 0x83),
+	regmap_reg_range(0x8e, 0x99),
+	regmap_reg_range(0x9a, 0xa5),
+	regmap_reg_range(0xa6, 0xa6),
+	regmap_reg_range(0xa7, 0xaa),
+	regmap_reg_range(0xab, 0xae),
+	regmap_reg_range(0xaf, 0xba),
+	regmap_reg_range(0xbb, 0xbc),
+	regmap_reg_range(0xbd, 0xbd),
+	regmap_reg_range(0xc0, 0xc0),
+	regmap_reg_range(0xc2, 0xc2),
+	regmap_reg_range(0xc3, 0xc3),
+	regmap_reg_range(0xc4, 0xc4),
+	regmap_reg_range(0xc6, 0xc6),
+};
+
+static const struct regmap_access_table ksz8873_register_set = {
+	.yes_ranges = ksz8873_valid_regs,
+	.n_yes_ranges = ARRAY_SIZE(ksz8873_valid_regs),
+};
+
 const struct ksz_chip_data ksz_switch_chips[] = {
+	[KSZ8563] = {
+		.chip_id = KSZ8563_CHIP_ID,
+		.dev_name = "KSZ8563",
+		.num_vlans = 4096,
+		.num_alus = 4096,
+		.num_statics = 16,
+		.cpu_ports = 0x07,	/* can be configured as cpu port */
+		.port_cnt = 3,		/* total port count */
+		.port_nirqs = 3,
+		.num_tx_queues = 4,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
+		.ops = &ksz9477_dev_ops,
+		.mib_names = ksz9477_mib_names,
+		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
+		.reg_mib_cnt = MIB_COUNTER_NUM,
+		.regs = ksz9477_regs,
+		.masks = ksz9477_masks,
+		.shifts = ksz9477_shifts,
+		.xmii_ctrl0 = ksz9477_xmii_ctrl0,
+		.xmii_ctrl1 = ksz8795_xmii_ctrl1, /* Same as ksz8795 */
+		.supports_mii = {false, false, true},
+		.supports_rmii = {false, false, true},
+		.supports_rgmii = {false, false, true},
+		.internal_phy = {true, true, false},
+		.gbit_capable = {false, false, true},
+		.wr_table = &ksz8563_register_set,
+		.rd_table = &ksz8563_register_set,
+	},
+
 	[KSZ8795] = {
 		.chip_id = KSZ8795_CHIP_ID,
 		.dev_name = "KSZ8795",
@@ -430,6 +1153,7 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 8,
 		.cpu_ports = 0x10,	/* can be configured as cpu port */
 		.port_cnt = 5,		/* total cpu and user ports */
+		.num_tx_queues = 4,
 		.ops = &ksz8_dev_ops,
 		.ksz87xx_eee_link_erratum = true,
 		.mib_names = ksz9477_mib_names,
@@ -468,6 +1192,7 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 8,
 		.cpu_ports = 0x10,	/* can be configured as cpu port */
 		.port_cnt = 5,		/* total cpu and user ports */
+		.num_tx_queues = 4,
 		.ops = &ksz8_dev_ops,
 		.ksz87xx_eee_link_erratum = true,
 		.mib_names = ksz9477_mib_names,
@@ -492,6 +1217,7 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 8,
 		.cpu_ports = 0x10,	/* can be configured as cpu port */
 		.port_cnt = 5,		/* total cpu and user ports */
+		.num_tx_queues = 4,
 		.ops = &ksz8_dev_ops,
 		.ksz87xx_eee_link_erratum = true,
 		.mib_names = ksz9477_mib_names,
@@ -516,6 +1242,7 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 8,
 		.cpu_ports = 0x4,	/* can be configured as cpu port */
 		.port_cnt = 3,
+		.num_tx_queues = 4,
 		.ops = &ksz8_dev_ops,
 		.mib_names = ksz88xx_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz88xx_mib_names),
@@ -526,6 +1253,8 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.supports_mii = {false, false, true},
 		.supports_rmii = {false, false, true},
 		.internal_phy = {true, true, false},
+		.wr_table = &ksz8873_register_set,
+		.rd_table = &ksz8873_register_set,
 	},
 
 	[KSZ9477] = {
@@ -536,8 +1265,11 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 16,
 		.cpu_ports = 0x7F,	/* can be configured as cpu port */
 		.port_cnt = 7,		/* total physical port count */
+		.port_nirqs = 4,
+		.num_tx_queues = 4,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
 		.ops = &ksz9477_dev_ops,
-		.phy_errata_9477 = true,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
 		.reg_mib_cnt = MIB_COUNTER_NUM,
@@ -554,6 +1286,41 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 				   false, true, false},
 		.internal_phy	= {true, true, true, true,
 				   true, false, false},
+		.gbit_capable	= {true, true, true, true, true, true, true},
+		.wr_table = &ksz9477_register_set,
+		.rd_table = &ksz9477_register_set,
+	},
+
+	[KSZ9896] = {
+		.chip_id = KSZ9896_CHIP_ID,
+		.dev_name = "KSZ9896",
+		.num_vlans = 4096,
+		.num_alus = 4096,
+		.num_statics = 16,
+		.cpu_ports = 0x3F,	/* can be configured as cpu port */
+		.port_cnt = 6,		/* total physical port count */
+		.port_nirqs = 2,
+		.num_tx_queues = 4,
+		.ops = &ksz9477_dev_ops,
+		.mib_names = ksz9477_mib_names,
+		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
+		.reg_mib_cnt = MIB_COUNTER_NUM,
+		.regs = ksz9477_regs,
+		.masks = ksz9477_masks,
+		.shifts = ksz9477_shifts,
+		.xmii_ctrl0 = ksz9477_xmii_ctrl0,
+		.xmii_ctrl1 = ksz9477_xmii_ctrl1,
+		.supports_mii	= {false, false, false, false,
+				   false, true},
+		.supports_rmii	= {false, false, false, false,
+				   false, true},
+		.supports_rgmii = {false, false, false, false,
+				   false, true},
+		.internal_phy	= {true, true, true, true,
+				   true, false},
+		.gbit_capable	= {true, true, true, true, true, true},
+		.wr_table = &ksz9896_register_set,
+		.rd_table = &ksz9896_register_set,
 	},
 
 	[KSZ9897] = {
@@ -564,8 +1331,9 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 16,
 		.cpu_ports = 0x7F,	/* can be configured as cpu port */
 		.port_cnt = 7,		/* total physical port count */
+		.port_nirqs = 2,
+		.num_tx_queues = 4,
 		.ops = &ksz9477_dev_ops,
-		.phy_errata_9477 = true,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
 		.reg_mib_cnt = MIB_COUNTER_NUM,
@@ -582,6 +1350,7 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 				   false, true, true},
 		.internal_phy	= {true, true, true, true,
 				   true, false, false},
+		.gbit_capable	= {true, true, true, true, true, true, true},
 	},
 
 	[KSZ9893] = {
@@ -592,6 +1361,8 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 16,
 		.cpu_ports = 0x07,	/* can be configured as cpu port */
 		.port_cnt = 3,		/* total port count */
+		.port_nirqs = 2,
+		.num_tx_queues = 4,
 		.ops = &ksz9477_dev_ops,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
@@ -605,6 +1376,35 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.supports_rmii = {false, false, true},
 		.supports_rgmii = {false, false, true},
 		.internal_phy = {true, true, false},
+		.gbit_capable = {true, true, true},
+	},
+
+	[KSZ9563] = {
+		.chip_id = KSZ9563_CHIP_ID,
+		.dev_name = "KSZ9563",
+		.num_vlans = 4096,
+		.num_alus = 4096,
+		.num_statics = 16,
+		.cpu_ports = 0x07,	/* can be configured as cpu port */
+		.port_cnt = 3,		/* total port count */
+		.port_nirqs = 3,
+		.num_tx_queues = 4,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
+		.ops = &ksz9477_dev_ops,
+		.mib_names = ksz9477_mib_names,
+		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
+		.reg_mib_cnt = MIB_COUNTER_NUM,
+		.regs = ksz9477_regs,
+		.masks = ksz9477_masks,
+		.shifts = ksz9477_shifts,
+		.xmii_ctrl0 = ksz9477_xmii_ctrl0,
+		.xmii_ctrl1 = ksz8795_xmii_ctrl1, /* Same as ksz8795 */
+		.supports_mii = {false, false, true},
+		.supports_rmii = {false, false, true},
+		.supports_rgmii = {false, false, true},
+		.internal_phy = {true, true, false},
+		.gbit_capable = {true, true, true},
 	},
 
 	[KSZ9567] = {
@@ -615,8 +1415,11 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 16,
 		.cpu_ports = 0x7F,	/* can be configured as cpu port */
 		.port_cnt = 7,		/* total physical port count */
+		.port_nirqs = 3,
+		.num_tx_queues = 4,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
 		.ops = &ksz9477_dev_ops,
-		.phy_errata_9477 = true,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
 		.reg_mib_cnt = MIB_COUNTER_NUM,
@@ -633,6 +1436,7 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 				   false, true, true},
 		.internal_phy	= {true, true, true, true,
 				   true, false, false},
+		.gbit_capable	= {true, true, true, true, true, true, true},
 	},
 
 	[LAN9370] = {
@@ -643,6 +1447,10 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 256,
 		.cpu_ports = 0x10,	/* can be configured as cpu port */
 		.port_cnt = 5,		/* total physical port count */
+		.port_nirqs = 6,
+		.num_tx_queues = 8,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
 		.ops = &lan937x_dev_ops,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
@@ -666,6 +1474,10 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 256,
 		.cpu_ports = 0x30,	/* can be configured as cpu port */
 		.port_cnt = 6,		/* total physical port count */
+		.port_nirqs = 6,
+		.num_tx_queues = 8,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
 		.ops = &lan937x_dev_ops,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
@@ -689,6 +1501,10 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 256,
 		.cpu_ports = 0x30,	/* can be configured as cpu port */
 		.port_cnt = 8,		/* total physical port count */
+		.port_nirqs = 6,
+		.num_tx_queues = 8,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
 		.ops = &lan937x_dev_ops,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
@@ -716,6 +1532,10 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 256,
 		.cpu_ports = 0x38,	/* can be configured as cpu port */
 		.port_cnt = 5,		/* total physical port count */
+		.port_nirqs = 6,
+		.num_tx_queues = 8,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
 		.ops = &lan937x_dev_ops,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
@@ -743,6 +1563,10 @@ const struct ksz_chip_data ksz_switch_chips[] = {
 		.num_statics = 256,
 		.cpu_ports = 0x30,	/* can be configured as cpu port */
 		.port_cnt = 8,		/* total physical port count */
+		.port_nirqs = 6,
+		.num_tx_queues = 8,
+		.tc_cbs_supported = true,
+		.tc_ets_supported = true,
 		.ops = &lan937x_dev_ops,
 		.mib_names = ksz9477_mib_names,
 		.mib_cnt = ARRAY_SIZE(ksz9477_mib_names),
@@ -875,6 +1699,55 @@ void ksz_r_mib_stats64(struct ksz_device *dev, int port)
 	spin_unlock(&mib->stats64_lock);
 }
 
+void ksz88xx_r_mib_stats64(struct ksz_device *dev, int port)
+{
+	struct ethtool_pause_stats *pstats;
+	struct rtnl_link_stats64 *stats;
+	struct ksz88xx_stats_raw *raw;
+	struct ksz_port_mib *mib;
+
+	mib = &dev->ports[port].mib;
+	stats = &mib->stats64;
+	pstats = &mib->pause_stats;
+	raw = (struct ksz88xx_stats_raw *)mib->counters;
+
+	spin_lock(&mib->stats64_lock);
+
+	stats->rx_packets = raw->rx_bcast + raw->rx_mcast + raw->rx_ucast +
+		raw->rx_pause;
+	stats->tx_packets = raw->tx_bcast + raw->tx_mcast + raw->tx_ucast +
+		raw->tx_pause;
+
+	/* HW counters are counting bytes + FCS which is not acceptable
+	 * for rtnl_link_stats64 interface
+	 */
+	stats->rx_bytes = raw->rx + raw->rx_hi - stats->rx_packets * ETH_FCS_LEN;
+	stats->tx_bytes = raw->tx + raw->tx_hi - stats->tx_packets * ETH_FCS_LEN;
+
+	stats->rx_length_errors = raw->rx_undersize + raw->rx_fragments +
+		raw->rx_oversize;
+
+	stats->rx_crc_errors = raw->rx_crc_err;
+	stats->rx_frame_errors = raw->rx_align_err;
+	stats->rx_dropped = raw->rx_discards;
+	stats->rx_errors = stats->rx_length_errors + stats->rx_crc_errors +
+		stats->rx_frame_errors  + stats->rx_dropped;
+
+	stats->tx_window_errors = raw->tx_late_col;
+	stats->tx_fifo_errors = raw->tx_discards;
+	stats->tx_aborted_errors = raw->tx_exc_col;
+	stats->tx_errors = stats->tx_window_errors + stats->tx_fifo_errors +
+		stats->tx_aborted_errors;
+
+	stats->multicast = raw->rx_mcast;
+	stats->collisions = raw->tx_total_col;
+
+	pstats->tx_pause_frames = raw->tx_pause;
+	pstats->rx_pause_frames = raw->rx_pause;
+
+	spin_unlock(&mib->stats64_lock);
+}
+
 static void ksz_get_stats64(struct dsa_switch *ds, int port,
 			    struct rtnl_link_stats64 *s)
 {
@@ -974,9 +1847,273 @@ static void ksz_update_port_member(struct ksz_device *dev, int port)
 	dev->dev_ops->cfg_port_member(dev, port, port_member | cpu_port);
 }
 
+static int ksz_sw_mdio_read(struct mii_bus *bus, int addr, int regnum)
+{
+	struct ksz_device *dev = bus->priv;
+	u16 val;
+	int ret;
+
+	ret = dev->dev_ops->r_phy(dev, addr, regnum, &val);
+	if (ret < 0)
+		return ret;
+
+	return val;
+}
+
+static int ksz_sw_mdio_write(struct mii_bus *bus, int addr, int regnum,
+			     u16 val)
+{
+	struct ksz_device *dev = bus->priv;
+
+	return dev->dev_ops->w_phy(dev, addr, regnum, val);
+}
+
+static int ksz_irq_phy_setup(struct ksz_device *dev)
+{
+	struct dsa_switch *ds = dev->ds;
+	int phy;
+	int irq;
+	int ret;
+
+	for (phy = 0; phy < KSZ_MAX_NUM_PORTS; phy++) {
+		if (BIT(phy) & ds->phys_mii_mask) {
+			irq = irq_find_mapping(dev->ports[phy].pirq.domain,
+					       PORT_SRC_PHY_INT);
+			if (irq < 0) {
+				ret = irq;
+				goto out;
+			}
+			ds->slave_mii_bus->irq[phy] = irq;
+		}
+	}
+	return 0;
+out:
+	while (phy--)
+		if (BIT(phy) & ds->phys_mii_mask)
+			irq_dispose_mapping(ds->slave_mii_bus->irq[phy]);
+
+	return ret;
+}
+
+static void ksz_irq_phy_free(struct ksz_device *dev)
+{
+	struct dsa_switch *ds = dev->ds;
+	int phy;
+
+	for (phy = 0; phy < KSZ_MAX_NUM_PORTS; phy++)
+		if (BIT(phy) & ds->phys_mii_mask)
+			irq_dispose_mapping(ds->slave_mii_bus->irq[phy]);
+}
+
+static int ksz_mdio_register(struct ksz_device *dev)
+{
+	struct dsa_switch *ds = dev->ds;
+	struct device_node *mdio_np;
+	struct mii_bus *bus;
+	int ret;
+
+	mdio_np = of_get_child_by_name(dev->dev->of_node, "mdio");
+	if (!mdio_np)
+		return 0;
+
+	bus = devm_mdiobus_alloc(ds->dev);
+	if (!bus) {
+		of_node_put(mdio_np);
+		return -ENOMEM;
+	}
+
+	bus->priv = dev;
+	bus->read = ksz_sw_mdio_read;
+	bus->write = ksz_sw_mdio_write;
+	bus->name = "ksz slave smi";
+	snprintf(bus->id, MII_BUS_ID_SIZE, "SMI-%d", ds->index);
+	bus->parent = ds->dev;
+	bus->phy_mask = ~ds->phys_mii_mask;
+
+	ds->slave_mii_bus = bus;
+
+	if (dev->irq > 0) {
+		ret = ksz_irq_phy_setup(dev);
+		if (ret) {
+			of_node_put(mdio_np);
+			return ret;
+		}
+	}
+
+	ret = devm_of_mdiobus_register(ds->dev, bus, mdio_np);
+	if (ret) {
+		dev_err(ds->dev, "unable to register MDIO bus %s\n",
+			bus->id);
+		if (dev->irq > 0)
+			ksz_irq_phy_free(dev);
+	}
+
+	of_node_put(mdio_np);
+
+	return ret;
+}
+
+static void ksz_irq_mask(struct irq_data *d)
+{
+	struct ksz_irq *kirq = irq_data_get_irq_chip_data(d);
+
+	kirq->masked |= BIT(d->hwirq);
+}
+
+static void ksz_irq_unmask(struct irq_data *d)
+{
+	struct ksz_irq *kirq = irq_data_get_irq_chip_data(d);
+
+	kirq->masked &= ~BIT(d->hwirq);
+}
+
+static void ksz_irq_bus_lock(struct irq_data *d)
+{
+	struct ksz_irq *kirq  = irq_data_get_irq_chip_data(d);
+
+	mutex_lock(&kirq->dev->lock_irq);
+}
+
+static void ksz_irq_bus_sync_unlock(struct irq_data *d)
+{
+	struct ksz_irq *kirq  = irq_data_get_irq_chip_data(d);
+	struct ksz_device *dev = kirq->dev;
+	int ret;
+
+	ret = ksz_write32(dev, kirq->reg_mask, kirq->masked);
+	if (ret)
+		dev_err(dev->dev, "failed to change IRQ mask\n");
+
+	mutex_unlock(&dev->lock_irq);
+}
+
+static const struct irq_chip ksz_irq_chip = {
+	.name			= "ksz-irq",
+	.irq_mask		= ksz_irq_mask,
+	.irq_unmask		= ksz_irq_unmask,
+	.irq_bus_lock		= ksz_irq_bus_lock,
+	.irq_bus_sync_unlock	= ksz_irq_bus_sync_unlock,
+};
+
+static int ksz_irq_domain_map(struct irq_domain *d,
+			      unsigned int irq, irq_hw_number_t hwirq)
+{
+	irq_set_chip_data(irq, d->host_data);
+	irq_set_chip_and_handler(irq, &ksz_irq_chip, handle_level_irq);
+	irq_set_noprobe(irq);
+
+	return 0;
+}
+
+static const struct irq_domain_ops ksz_irq_domain_ops = {
+	.map	= ksz_irq_domain_map,
+	.xlate	= irq_domain_xlate_twocell,
+};
+
+static void ksz_irq_free(struct ksz_irq *kirq)
+{
+	int irq, virq;
+
+	free_irq(kirq->irq_num, kirq);
+
+	for (irq = 0; irq < kirq->nirqs; irq++) {
+		virq = irq_find_mapping(kirq->domain, irq);
+		irq_dispose_mapping(virq);
+	}
+
+	irq_domain_remove(kirq->domain);
+}
+
+static irqreturn_t ksz_irq_thread_fn(int irq, void *dev_id)
+{
+	struct ksz_irq *kirq = dev_id;
+	unsigned int nhandled = 0;
+	struct ksz_device *dev;
+	unsigned int sub_irq;
+	u8 data;
+	int ret;
+	u8 n;
+
+	dev = kirq->dev;
+
+	/* Read interrupt status register */
+	ret = ksz_read8(dev, kirq->reg_status, &data);
+	if (ret)
+		goto out;
+
+	for (n = 0; n < kirq->nirqs; ++n) {
+		if (data & BIT(n)) {
+			sub_irq = irq_find_mapping(kirq->domain, n);
+			handle_nested_irq(sub_irq);
+			++nhandled;
+		}
+	}
+out:
+	return (nhandled > 0 ? IRQ_HANDLED : IRQ_NONE);
+}
+
+static int ksz_irq_common_setup(struct ksz_device *dev, struct ksz_irq *kirq)
+{
+	int ret, n;
+
+	kirq->dev = dev;
+	kirq->masked = ~0;
+
+	kirq->domain = irq_domain_add_simple(dev->dev->of_node, kirq->nirqs, 0,
+					     &ksz_irq_domain_ops, kirq);
+	if (!kirq->domain)
+		return -ENOMEM;
+
+	for (n = 0; n < kirq->nirqs; n++)
+		irq_create_mapping(kirq->domain, n);
+
+	ret = request_threaded_irq(kirq->irq_num, NULL, ksz_irq_thread_fn,
+				   IRQF_ONESHOT, kirq->name, kirq);
+	if (ret)
+		goto out;
+
+	return 0;
+
+out:
+	ksz_irq_free(kirq);
+
+	return ret;
+}
+
+static int ksz_girq_setup(struct ksz_device *dev)
+{
+	struct ksz_irq *girq = &dev->girq;
+
+	girq->nirqs = dev->info->port_cnt;
+	girq->reg_mask = REG_SW_PORT_INT_MASK__1;
+	girq->reg_status = REG_SW_PORT_INT_STATUS__1;
+	snprintf(girq->name, sizeof(girq->name), "global_port_irq");
+
+	girq->irq_num = dev->irq;
+
+	return ksz_irq_common_setup(dev, girq);
+}
+
+static int ksz_pirq_setup(struct ksz_device *dev, u8 p)
+{
+	struct ksz_irq *pirq = &dev->ports[p].pirq;
+
+	pirq->nirqs = dev->info->port_nirqs;
+	pirq->reg_mask = dev->dev_ops->get_port_addr(p, REG_PORT_INT_MASK);
+	pirq->reg_status = dev->dev_ops->get_port_addr(p, REG_PORT_INT_STATUS);
+	snprintf(pirq->name, sizeof(pirq->name), "port_irq-%d", p);
+
+	pirq->irq_num = irq_find_mapping(dev->girq.domain, p);
+	if (pirq->irq_num < 0)
+		return pirq->irq_num;
+
+	return ksz_irq_common_setup(dev, pirq);
+}
+
 static int ksz_setup(struct dsa_switch *ds)
 {
 	struct ksz_device *dev = ds->priv;
+	struct dsa_port *dp;
 	struct ksz_port *p;
 	const u16 *regs;
 	int ret;
@@ -995,7 +2132,7 @@ static int ksz_setup(struct dsa_switch *ds)
 	}
 
 	/* set broadcast storm protection 10% rate */
-	regmap_update_bits(dev->regmap[1], regs[S_BROADCAST_CTRL],
+	regmap_update_bits(ksz_regmap_16(dev), regs[S_BROADCAST_CTRL],
 			   BROADCAST_STORM_RATE,
 			   (BROADCAST_STORM_VALUE *
 			   BROADCAST_STORM_PROT_RATE) / 100);
@@ -1004,7 +2141,9 @@ static int ksz_setup(struct dsa_switch *ds)
 
 	dev->dev_ops->enable_stp_addr(dev);
 
-	regmap_update_bits(dev->regmap[0], regs[S_MULTICAST_CTRL],
+	ds->num_tx_queues = dev->info->num_tx_queues;
+
+	regmap_update_bits(ksz_regmap_8(dev), regs[S_MULTICAST_CTRL],
 			   MULTICAST_STORM_DISABLE, MULTICAST_STORM_DISABLE);
 
 	ksz_init_mib_timer(dev);
@@ -1025,11 +2164,76 @@ static int ksz_setup(struct dsa_switch *ds)
 	p = &dev->ports[dev->cpu_port];
 	p->learning = true;
 
+	if (dev->irq > 0) {
+		ret = ksz_girq_setup(dev);
+		if (ret)
+			return ret;
+
+		dsa_switch_for_each_user_port(dp, dev->ds) {
+			ret = ksz_pirq_setup(dev, dp->index);
+			if (ret)
+				goto out_girq;
+
+			ret = ksz_ptp_irq_setup(ds, dp->index);
+			if (ret)
+				goto out_pirq;
+		}
+	}
+
+	ret = ksz_ptp_clock_register(ds);
+	if (ret) {
+		dev_err(dev->dev, "Failed to register PTP clock: %d\n", ret);
+		goto out_ptpirq;
+	}
+
+	ret = ksz_mdio_register(dev);
+	if (ret < 0) {
+		dev_err(dev->dev, "failed to register the mdio");
+		goto out_ptp_clock_unregister;
+	}
+
 	/* start switch */
-	regmap_update_bits(dev->regmap[0], regs[S_START_CTRL],
+	regmap_update_bits(ksz_regmap_8(dev), regs[S_START_CTRL],
 			   SW_START, SW_START);
 
 	return 0;
+
+out_ptp_clock_unregister:
+	ksz_ptp_clock_unregister(ds);
+out_ptpirq:
+	if (dev->irq > 0)
+		dsa_switch_for_each_user_port(dp, dev->ds)
+			ksz_ptp_irq_free(ds, dp->index);
+out_pirq:
+	if (dev->irq > 0)
+		dsa_switch_for_each_user_port(dp, dev->ds)
+			ksz_irq_free(&dev->ports[dp->index].pirq);
+out_girq:
+	if (dev->irq > 0)
+		ksz_irq_free(&dev->girq);
+
+	return ret;
+}
+
+static void ksz_teardown(struct dsa_switch *ds)
+{
+	struct ksz_device *dev = ds->priv;
+	struct dsa_port *dp;
+
+	ksz_ptp_clock_unregister(ds);
+
+	if (dev->irq > 0) {
+		dsa_switch_for_each_user_port(dp, dev->ds) {
+			ksz_ptp_irq_free(ds, dp->index);
+
+			ksz_irq_free(&dev->ports[dp->index].pirq);
+		}
+
+		ksz_irq_free(&dev->girq);
+	}
+
+	if (dev->dev_ops->teardown)
+		dev->dev_ops->teardown(ds);
 }
 
 static void port_r_cnt(struct ksz_device *dev, int port)
@@ -1113,8 +2317,11 @@ static int ksz_phy_read16(struct dsa_switch *ds, int addr, int reg)
 {
 	struct ksz_device *dev = ds->priv;
 	u16 val = 0xffff;
+	int ret;
 
-	dev->dev_ops->r_phy(dev, addr, reg, &val);
+	ret = dev->dev_ops->r_phy(dev, addr, reg, &val);
+	if (ret)
+		return ret;
 
 	return val;
 }
@@ -1122,8 +2329,11 @@ static int ksz_phy_read16(struct dsa_switch *ds, int addr, int reg)
 static int ksz_phy_write16(struct dsa_switch *ds, int addr, int reg, u16 val)
 {
 	struct ksz_device *dev = ds->priv;
+	int ret;
 
-	dev->dev_ops->w_phy(dev, addr, reg, val);
+	ret = dev->dev_ops->w_phy(dev, addr, reg, val);
+	if (ret)
+		return ret;
 
 	return 0;
 }
@@ -1210,6 +2420,16 @@ static void ksz_port_fast_age(struct dsa_switch *ds, int port)
 	struct ksz_device *dev = ds->priv;
 
 	dev->dev_ops->flush_dyn_mac_table(dev, port);
+}
+
+static int ksz_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
+{
+	struct ksz_device *dev = ds->priv;
+
+	if (!dev->dev_ops->set_ageing_time)
+		return -EOPNOTSUPP;
+
+	return dev->dev_ops->set_ageing_time(dev, msecs);
 }
 
 static int ksz_port_fdb_add(struct dsa_switch *ds, int port,
@@ -1375,10 +2595,13 @@ static enum dsa_tag_protocol ksz_get_tag_protocol(struct dsa_switch *ds,
 		proto = DSA_TAG_PROTO_KSZ8795;
 
 	if (dev->chip_id == KSZ8830_CHIP_ID ||
-	    dev->chip_id == KSZ9893_CHIP_ID)
+	    dev->chip_id == KSZ8563_CHIP_ID ||
+	    dev->chip_id == KSZ9893_CHIP_ID ||
+	    dev->chip_id == KSZ9563_CHIP_ID)
 		proto = DSA_TAG_PROTO_KSZ9893;
 
 	if (dev->chip_id == KSZ9477_CHIP_ID ||
+	    dev->chip_id == KSZ9896_CHIP_ID ||
 	    dev->chip_id == KSZ9897_CHIP_ID ||
 	    dev->chip_id == KSZ9567_CHIP_ID)
 		proto = DSA_TAG_PROTO_KSZ9477;
@@ -1387,6 +2610,17 @@ static enum dsa_tag_protocol ksz_get_tag_protocol(struct dsa_switch *ds,
 		proto = DSA_TAG_PROTO_LAN937X_VALUE;
 
 	return proto;
+}
+
+static int ksz_connect_tag_protocol(struct dsa_switch *ds,
+				    enum dsa_tag_protocol proto)
+{
+	struct ksz_tagger_data *tagger_data;
+
+	tagger_data = ksz_tagger_data(ds);
+	tagger_data->xmit_work_fn = ksz_port_deferred_xmit;
+
+	return 0;
 }
 
 static int ksz_port_vlan_filtering(struct dsa_switch *ds, int port,
@@ -1458,10 +2692,93 @@ static int ksz_max_mtu(struct dsa_switch *ds, int port)
 {
 	struct ksz_device *dev = ds->priv;
 
-	if (!dev->dev_ops->max_mtu)
+	switch (dev->chip_id) {
+	case KSZ8795_CHIP_ID:
+	case KSZ8794_CHIP_ID:
+	case KSZ8765_CHIP_ID:
+		return KSZ8795_HUGE_PACKET_SIZE - VLAN_ETH_HLEN - ETH_FCS_LEN;
+	case KSZ8830_CHIP_ID:
+		return KSZ8863_HUGE_PACKET_SIZE - VLAN_ETH_HLEN - ETH_FCS_LEN;
+	case KSZ8563_CHIP_ID:
+	case KSZ9477_CHIP_ID:
+	case KSZ9563_CHIP_ID:
+	case KSZ9567_CHIP_ID:
+	case KSZ9893_CHIP_ID:
+	case KSZ9896_CHIP_ID:
+	case KSZ9897_CHIP_ID:
+	case LAN9370_CHIP_ID:
+	case LAN9371_CHIP_ID:
+	case LAN9372_CHIP_ID:
+	case LAN9373_CHIP_ID:
+	case LAN9374_CHIP_ID:
+		return KSZ9477_MAX_FRAME_SIZE - VLAN_ETH_HLEN - ETH_FCS_LEN;
+	}
+
+	return -EOPNOTSUPP;
+}
+
+static int ksz_validate_eee(struct dsa_switch *ds, int port)
+{
+	struct ksz_device *dev = ds->priv;
+
+	if (!dev->info->internal_phy[port])
 		return -EOPNOTSUPP;
 
-	return dev->dev_ops->max_mtu(dev, port);
+	switch (dev->chip_id) {
+	case KSZ8563_CHIP_ID:
+	case KSZ9477_CHIP_ID:
+	case KSZ9563_CHIP_ID:
+	case KSZ9567_CHIP_ID:
+	case KSZ9893_CHIP_ID:
+	case KSZ9896_CHIP_ID:
+	case KSZ9897_CHIP_ID:
+		return 0;
+	}
+
+	return -EOPNOTSUPP;
+}
+
+static int ksz_get_mac_eee(struct dsa_switch *ds, int port,
+			   struct ethtool_eee *e)
+{
+	int ret;
+
+	ret = ksz_validate_eee(ds, port);
+	if (ret)
+		return ret;
+
+	/* There is no documented control of Tx LPI configuration. */
+	e->tx_lpi_enabled = true;
+
+	/* There is no documented control of Tx LPI timer. According to tests
+	 * Tx LPI timer seems to be set by default to minimal value.
+	 */
+	e->tx_lpi_timer = 0;
+
+	return 0;
+}
+
+static int ksz_set_mac_eee(struct dsa_switch *ds, int port,
+			   struct ethtool_eee *e)
+{
+	struct ksz_device *dev = ds->priv;
+	int ret;
+
+	ret = ksz_validate_eee(ds, port);
+	if (ret)
+		return ret;
+
+	if (!e->tx_lpi_enabled) {
+		dev_err(dev->dev, "Disabling EEE Tx LPI is not supported\n");
+		return -EINVAL;
+	}
+
+	if (e->tx_lpi_timer) {
+		dev_err(dev->dev, "Setting EEE Tx LPI timer is not supported\n");
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static void ksz_set_xmii(struct ksz_device *dev, int port,
@@ -1493,7 +2810,9 @@ static void ksz_set_xmii(struct ksz_device *dev, int port,
 	case PHY_INTERFACE_MODE_RGMII_RXID:
 		data8 |= bitval[P_RGMII_SEL];
 		/* On KSZ9893, disable RGMII in-band status support */
-		if (dev->features & IS_9893)
+		if (dev->chip_id == KSZ9893_CHIP_ID ||
+		    dev->chip_id == KSZ8563_CHIP_ID ||
+		    dev->chip_id == KSZ9563_CHIP_ID)
 			data8 &= ~P_MII_MAC_MODE;
 		break;
 	default:
@@ -1703,7 +3022,7 @@ static void ksz_phylink_mac_link_up(struct dsa_switch *ds, int port,
 
 static int ksz_switch_detect(struct ksz_device *dev)
 {
-	u8 id1, id2;
+	u8 id1, id2, id4;
 	u16 id16;
 	u32 id32;
 	int ret;
@@ -1748,8 +3067,8 @@ static int ksz_switch_detect(struct ksz_device *dev)
 
 		switch (id32) {
 		case KSZ9477_CHIP_ID:
+		case KSZ9896_CHIP_ID:
 		case KSZ9897_CHIP_ID:
-		case KSZ9893_CHIP_ID:
 		case KSZ9567_CHIP_ID:
 		case LAN9370_CHIP_ID:
 		case LAN9371_CHIP_ID:
@@ -1757,6 +3076,20 @@ static int ksz_switch_detect(struct ksz_device *dev)
 		case LAN9373_CHIP_ID:
 		case LAN9374_CHIP_ID:
 			dev->chip_id = id32;
+			break;
+		case KSZ9893_CHIP_ID:
+			ret = ksz_read8(dev, REG_CHIP_ID4,
+					&id4);
+			if (ret)
+				return ret;
+
+			if (id4 == SKU_ID_KSZ8563)
+				dev->chip_id = KSZ8563_CHIP_ID;
+			else if (id4 == SKU_ID_KSZ9563)
+				dev->chip_id = KSZ9563_CHIP_ID;
+			else
+				dev->chip_id = KSZ9893_CHIP_ID;
+
 			break;
 		default:
 			dev_err(dev->dev,
@@ -1767,10 +3100,324 @@ static int ksz_switch_detect(struct ksz_device *dev)
 	return 0;
 }
 
+/* Bandwidth is calculated by idle slope/transmission speed. Then the Bandwidth
+ * is converted to Hex-decimal using the successive multiplication method. On
+ * every step, integer part is taken and decimal part is carry forwarded.
+ */
+static int cinc_cal(s32 idle_slope, s32 send_slope, u32 *bw)
+{
+	u32 cinc = 0;
+	u32 txrate;
+	u32 rate;
+	u8 temp;
+	u8 i;
+
+	txrate = idle_slope - send_slope;
+
+	if (!txrate)
+		return -EINVAL;
+
+	rate = idle_slope;
+
+	/* 24 bit register */
+	for (i = 0; i < 6; i++) {
+		rate = rate * 16;
+
+		temp = rate / txrate;
+
+		rate %= txrate;
+
+		cinc = ((cinc << 4) | temp);
+	}
+
+	*bw = cinc;
+
+	return 0;
+}
+
+static int ksz_setup_tc_mode(struct ksz_device *dev, int port, u8 scheduler,
+			     u8 shaper)
+{
+	return ksz_pwrite8(dev, port, REG_PORT_MTI_QUEUE_CTRL_0,
+			   FIELD_PREP(MTI_SCHEDULE_MODE_M, scheduler) |
+			   FIELD_PREP(MTI_SHAPING_M, shaper));
+}
+
+static int ksz_setup_tc_cbs(struct dsa_switch *ds, int port,
+			    struct tc_cbs_qopt_offload *qopt)
+{
+	struct ksz_device *dev = ds->priv;
+	int ret;
+	u32 bw;
+
+	if (!dev->info->tc_cbs_supported)
+		return -EOPNOTSUPP;
+
+	if (qopt->queue > dev->info->num_tx_queues)
+		return -EINVAL;
+
+	/* Queue Selection */
+	ret = ksz_pwrite32(dev, port, REG_PORT_MTI_QUEUE_INDEX__4, qopt->queue);
+	if (ret)
+		return ret;
+
+	if (!qopt->enable)
+		return ksz_setup_tc_mode(dev, port, MTI_SCHEDULE_WRR,
+					 MTI_SHAPING_OFF);
+
+	/* High Credit */
+	ret = ksz_pwrite16(dev, port, REG_PORT_MTI_HI_WATER_MARK,
+			   qopt->hicredit);
+	if (ret)
+		return ret;
+
+	/* Low Credit */
+	ret = ksz_pwrite16(dev, port, REG_PORT_MTI_LO_WATER_MARK,
+			   qopt->locredit);
+	if (ret)
+		return ret;
+
+	/* Credit Increment Register */
+	ret = cinc_cal(qopt->idleslope, qopt->sendslope, &bw);
+	if (ret)
+		return ret;
+
+	if (dev->dev_ops->tc_cbs_set_cinc) {
+		ret = dev->dev_ops->tc_cbs_set_cinc(dev, port, bw);
+		if (ret)
+			return ret;
+	}
+
+	return ksz_setup_tc_mode(dev, port, MTI_SCHEDULE_STRICT_PRIO,
+				 MTI_SHAPING_SRP);
+}
+
+static int ksz_disable_egress_rate_limit(struct ksz_device *dev, int port)
+{
+	int queue, ret;
+
+	/* Configuration will not take effect until the last Port Queue X
+	 * Egress Limit Control Register is written.
+	 */
+	for (queue = 0; queue < dev->info->num_tx_queues; queue++) {
+		ret = ksz_pwrite8(dev, port, KSZ9477_REG_PORT_OUT_RATE_0 + queue,
+				  KSZ9477_OUT_RATE_NO_LIMIT);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+static int ksz_ets_band_to_queue(struct tc_ets_qopt_offload_replace_params *p,
+				 int band)
+{
+	/* Compared to queues, bands prioritize packets differently. In strict
+	 * priority mode, the lowest priority is assigned to Queue 0 while the
+	 * highest priority is given to Band 0.
+	 */
+	return p->bands - 1 - band;
+}
+
+static int ksz_queue_set_strict(struct ksz_device *dev, int port, int queue)
+{
+	int ret;
+
+	ret = ksz_pwrite32(dev, port, REG_PORT_MTI_QUEUE_INDEX__4, queue);
+	if (ret)
+		return ret;
+
+	return ksz_setup_tc_mode(dev, port, MTI_SCHEDULE_STRICT_PRIO,
+				 MTI_SHAPING_OFF);
+}
+
+static int ksz_queue_set_wrr(struct ksz_device *dev, int port, int queue,
+			     int weight)
+{
+	int ret;
+
+	ret = ksz_pwrite32(dev, port, REG_PORT_MTI_QUEUE_INDEX__4, queue);
+	if (ret)
+		return ret;
+
+	ret = ksz_setup_tc_mode(dev, port, MTI_SCHEDULE_WRR,
+				MTI_SHAPING_OFF);
+	if (ret)
+		return ret;
+
+	return ksz_pwrite8(dev, port, KSZ9477_PORT_MTI_QUEUE_CTRL_1, weight);
+}
+
+static int ksz_tc_ets_add(struct ksz_device *dev, int port,
+			  struct tc_ets_qopt_offload_replace_params *p)
+{
+	int ret, band, tc_prio;
+	u32 queue_map = 0;
+
+	/* In order to ensure proper prioritization, it is necessary to set the
+	 * rate limit for the related queue to zero. Otherwise strict priority
+	 * or WRR mode will not work. This is a hardware limitation.
+	 */
+	ret = ksz_disable_egress_rate_limit(dev, port);
+	if (ret)
+		return ret;
+
+	/* Configure queue scheduling mode for all bands. Currently only strict
+	 * prio mode is supported.
+	 */
+	for (band = 0; band < p->bands; band++) {
+		int queue = ksz_ets_band_to_queue(p, band);
+
+		ret = ksz_queue_set_strict(dev, port, queue);
+		if (ret)
+			return ret;
+	}
+
+	/* Configure the mapping between traffic classes and queues. Note:
+	 * priomap variable support 16 traffic classes, but the chip can handle
+	 * only 8 classes.
+	 */
+	for (tc_prio = 0; tc_prio < ARRAY_SIZE(p->priomap); tc_prio++) {
+		int queue;
+
+		if (tc_prio > KSZ9477_MAX_TC_PRIO)
+			break;
+
+		queue = ksz_ets_band_to_queue(p, p->priomap[tc_prio]);
+		queue_map |= queue << (tc_prio * KSZ9477_PORT_TC_MAP_S);
+	}
+
+	return ksz_pwrite32(dev, port, KSZ9477_PORT_MRI_TC_MAP__4, queue_map);
+}
+
+static int ksz_tc_ets_del(struct ksz_device *dev, int port)
+{
+	int ret, queue, tc_prio, s;
+	u32 queue_map = 0;
+
+	/* To restore the default chip configuration, set all queues to use the
+	 * WRR scheduler with a weight of 1.
+	 */
+	for (queue = 0; queue < dev->info->num_tx_queues; queue++) {
+		ret = ksz_queue_set_wrr(dev, port, queue,
+					KSZ9477_DEFAULT_WRR_WEIGHT);
+		if (ret)
+			return ret;
+	}
+
+	switch (dev->info->num_tx_queues) {
+	case 2:
+		s = 2;
+		break;
+	case 4:
+		s = 1;
+		break;
+	case 8:
+		s = 0;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/* Revert the queue mapping for TC-priority to its default setting on
+	 * the chip.
+	 */
+	for (tc_prio = 0; tc_prio <= KSZ9477_MAX_TC_PRIO; tc_prio++) {
+		int queue;
+
+		queue = tc_prio >> s;
+		queue_map |= queue << (tc_prio * KSZ9477_PORT_TC_MAP_S);
+	}
+
+	return ksz_pwrite32(dev, port, KSZ9477_PORT_MRI_TC_MAP__4, queue_map);
+}
+
+static int ksz_tc_ets_validate(struct ksz_device *dev, int port,
+			       struct tc_ets_qopt_offload_replace_params *p)
+{
+	int band;
+
+	/* Since it is not feasible to share one port among multiple qdisc,
+	 * the user must configure all available queues appropriately.
+	 */
+	if (p->bands != dev->info->num_tx_queues) {
+		dev_err(dev->dev, "Not supported amount of bands. It should be %d\n",
+			dev->info->num_tx_queues);
+		return -EOPNOTSUPP;
+	}
+
+	for (band = 0; band < p->bands; ++band) {
+		/* The KSZ switches utilize a weighted round robin configuration
+		 * where a certain number of packets can be transmitted from a
+		 * queue before the next queue is serviced. For more information
+		 * on this, refer to section 5.2.8.4 of the KSZ8565R
+		 * documentation on the Port Transmit Queue Control 1 Register.
+		 * However, the current ETS Qdisc implementation (as of February
+		 * 2023) assigns a weight to each queue based on the number of
+		 * bytes or extrapolated bandwidth in percentages. Since this
+		 * differs from the KSZ switches' method and we don't want to
+		 * fake support by converting bytes to packets, it is better to
+		 * return an error instead.
+		 */
+		if (p->quanta[band]) {
+			dev_err(dev->dev, "Quanta/weights configuration is not supported.\n");
+			return -EOPNOTSUPP;
+		}
+	}
+
+	return 0;
+}
+
+static int ksz_tc_setup_qdisc_ets(struct dsa_switch *ds, int port,
+				  struct tc_ets_qopt_offload *qopt)
+{
+	struct ksz_device *dev = ds->priv;
+	int ret;
+
+	if (!dev->info->tc_ets_supported)
+		return -EOPNOTSUPP;
+
+	if (qopt->parent != TC_H_ROOT) {
+		dev_err(dev->dev, "Parent should be \"root\"\n");
+		return -EOPNOTSUPP;
+	}
+
+	switch (qopt->command) {
+	case TC_ETS_REPLACE:
+		ret = ksz_tc_ets_validate(dev, port, &qopt->replace_params);
+		if (ret)
+			return ret;
+
+		return ksz_tc_ets_add(dev, port, &qopt->replace_params);
+	case TC_ETS_DESTROY:
+		return ksz_tc_ets_del(dev, port);
+	case TC_ETS_STATS:
+	case TC_ETS_GRAFT:
+		return -EOPNOTSUPP;
+	}
+
+	return -EOPNOTSUPP;
+}
+
+static int ksz_setup_tc(struct dsa_switch *ds, int port,
+			enum tc_setup_type type, void *type_data)
+{
+	switch (type) {
+	case TC_SETUP_QDISC_CBS:
+		return ksz_setup_tc_cbs(ds, port, type_data);
+	case TC_SETUP_QDISC_ETS:
+		return ksz_tc_setup_qdisc_ets(ds, port, type_data);
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
 static const struct dsa_switch_ops ksz_switch_ops = {
 	.get_tag_protocol	= ksz_get_tag_protocol,
+	.connect_tag_protocol   = ksz_connect_tag_protocol,
 	.get_phy_flags		= ksz_get_phy_flags,
 	.setup			= ksz_setup,
+	.teardown		= ksz_teardown,
 	.phy_read		= ksz_phy_read16,
 	.phy_write		= ksz_phy_write16,
 	.phylink_get_caps	= ksz_phylink_get_caps,
@@ -1778,6 +3425,7 @@ static const struct dsa_switch_ops ksz_switch_ops = {
 	.phylink_mac_link_up	= ksz_phylink_mac_link_up,
 	.phylink_mac_link_down	= ksz_mac_link_down,
 	.port_enable		= ksz_enable_port,
+	.set_ageing_time	= ksz_set_ageing_time,
 	.get_strings		= ksz_get_strings,
 	.get_ethtool_stats	= ksz_get_ethtool_stats,
 	.get_sset_count		= ksz_sset_count,
@@ -1801,6 +3449,14 @@ static const struct dsa_switch_ops ksz_switch_ops = {
 	.get_pause_stats	= ksz_get_pause_stats,
 	.port_change_mtu	= ksz_change_mtu,
 	.port_max_mtu		= ksz_max_mtu,
+	.get_ts_info		= ksz_get_ts_info,
+	.port_hwtstamp_get	= ksz_hwtstamp_get,
+	.port_hwtstamp_set	= ksz_hwtstamp_set,
+	.port_txtstamp		= ksz_port_txtstamp,
+	.port_rxtstamp		= ksz_port_rxtstamp,
+	.port_setup_tc		= ksz_setup_tc,
+	.get_mac_eee		= ksz_get_mac_eee,
+	.set_mac_eee		= ksz_set_mac_eee,
 };
 
 struct ksz_device *ksz_switch_alloc(struct device *base, void *priv)
@@ -1935,6 +3591,9 @@ int ksz_switch_register(struct ksz_device *dev)
 				     GFP_KERNEL);
 		if (!dev->ports[i].mib.counters)
 			return -ENOMEM;
+
+		dev->ports[i].ksz_dev = dev;
+		dev->ports[i].num = i;
 	}
 
 	/* set the real number of ports */

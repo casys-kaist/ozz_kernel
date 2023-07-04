@@ -151,7 +151,7 @@ static inline void ti_abb_clear_txdone(const struct ti_abb *abb)
 };
 
 /**
- * ti_abb_wait_tranx() - waits for ABB tranxdone event
+ * ti_abb_wait_txdone() - waits for ABB tranxdone event
  * @dev:	device
  * @abb:	pointer to the abb instance
  *
@@ -865,6 +865,7 @@ static struct platform_driver ti_abb_driver = {
 	.probe = ti_abb_probe,
 	.driver = {
 		   .name = "ti_abb",
+		   .probe_type = PROBE_PREFER_ASYNCHRONOUS,
 		   .of_match_table = of_match_ptr(ti_abb_of_match),
 		   },
 };

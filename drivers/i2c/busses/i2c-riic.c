@@ -400,7 +400,6 @@ static int riic_i2c_probe(struct platform_device *pdev)
 {
 	struct riic_dev *riic;
 	struct i2c_adapter *adap;
-	struct resource *res;
 	struct i2c_timings i2c_t;
 	struct reset_control *rstc;
 	int i, ret;
@@ -409,8 +408,7 @@ static int riic_i2c_probe(struct platform_device *pdev)
 	if (!riic)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	riic->base = devm_ioremap_resource(&pdev->dev, res);
+	riic->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(riic->base))
 		return PTR_ERR(riic->base);
 
@@ -479,7 +477,7 @@ out:
 	return ret;
 }
 
-static int riic_i2c_remove(struct platform_device *pdev)
+static void riic_i2c_remove(struct platform_device *pdev)
 {
 	struct riic_dev *riic = platform_get_drvdata(pdev);
 
@@ -488,8 +486,6 @@ static int riic_i2c_remove(struct platform_device *pdev)
 	pm_runtime_put(&pdev->dev);
 	i2c_del_adapter(&riic->adapter);
 	pm_runtime_disable(&pdev->dev);
-
-	return 0;
 }
 
 static const struct of_device_id riic_i2c_dt_ids[] = {
@@ -499,7 +495,7 @@ static const struct of_device_id riic_i2c_dt_ids[] = {
 
 static struct platform_driver riic_i2c_driver = {
 	.probe		= riic_i2c_probe,
-	.remove		= riic_i2c_remove,
+	.remove_new	= riic_i2c_remove,
 	.driver		= {
 		.name	= "i2c-riic",
 		.of_match_table = riic_i2c_dt_ids,

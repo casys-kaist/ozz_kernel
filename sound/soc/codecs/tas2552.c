@@ -736,10 +736,9 @@ static int tas2552_probe(struct i2c_client *client)
 	return ret;
 }
 
-static int tas2552_i2c_remove(struct i2c_client *client)
+static void tas2552_i2c_remove(struct i2c_client *client)
 {
 	pm_runtime_disable(&client->dev);
-	return 0;
 }
 
 static const struct i2c_device_id tas2552_id[] = {
@@ -762,7 +761,7 @@ static struct i2c_driver tas2552_i2c_driver = {
 		.of_match_table = of_match_ptr(tas2552_of_match),
 		.pm = &tas2552_pm,
 	},
-	.probe_new = tas2552_probe,
+	.probe = tas2552_probe,
 	.remove = tas2552_i2c_remove,
 	.id_table = tas2552_id,
 };

@@ -121,8 +121,7 @@ static struct hclgevf_dev *hclgevf_ae_get_hdev(struct hnae3_handle *handle)
 		return container_of(handle, struct hclgevf_dev, nic);
 }
 
-static void hclgevf_update_stats(struct hnae3_handle *handle,
-				 struct net_device_stats *net_stats)
+static void hclgevf_update_stats(struct hnae3_handle *handle)
 {
 	struct hclgevf_dev *hdev = hclgevf_ae_get_hdev(handle);
 	int status;
@@ -1436,7 +1435,10 @@ static int hclgevf_reset_wait(struct hclgevf_dev *hdev)
 	 * might happen in case reset assertion was made by PF. Yes, this also
 	 * means we might end up waiting bit more even for VF reset.
 	 */
-	msleep(5000);
+	if (hdev->reset_type == HNAE3_VF_FULL_RESET)
+		msleep(5000);
+	else
+		msleep(500);
 
 	return 0;
 }
@@ -1642,8 +1644,7 @@ err_reset:
 	hclgevf_reset_err_handle(hdev);
 }
 
-static enum hnae3_reset_type hclgevf_get_reset_level(struct hclgevf_dev *hdev,
-						     unsigned long *addr)
+static enum hnae3_reset_type hclgevf_get_reset_level(unsigned long *addr)
 {
 	enum hnae3_reset_type rst_level = HNAE3_NONE_RESET;
 
@@ -1682,8 +1683,7 @@ static void hclgevf_reset_event(struct pci_dev *pdev,
 
 	if (hdev->default_reset_request)
 		hdev->reset_level =
-			hclgevf_get_reset_level(hdev,
-						&hdev->default_reset_request);
+			hclgevf_get_reset_level(&hdev->default_reset_request);
 	else
 		hdev->reset_level = HNAE3_VF_FUNC_RESET;
 
@@ -1825,7 +1825,7 @@ static void hclgevf_reset_service_task(struct hclgevf_dev *hdev)
 
 		hdev->last_reset_time = jiffies;
 		hdev->reset_type =
-			hclgevf_get_reset_level(hdev, &hdev->reset_pending);
+			hclgevf_get_reset_level(&hdev->reset_pending);
 		if (hdev->reset_type != HNAE3_NONE_RESET)
 			hclgevf_reset(hdev);
 	} else if (test_and_clear_bit(HCLGEVF_RESET_REQUESTED,
@@ -2125,7 +2125,7 @@ static int hclgevf_config_gro(struct hclgevf_dev *hdev)
 	struct hclge_desc desc;
 	int ret;
 
-	if (!hnae3_dev_gro_supported(hdev))
+	if (!hnae3_ae_dev_gro_supported(hdev->ae_dev))
 		return 0;
 
 	hclgevf_cmd_setup_basic_desc(&desc, HCLGE_OPC_GRO_GENERIC_CONFIG,
@@ -2157,8 +2157,7 @@ static int hclgevf_rss_init_hw(struct hclgevf_dev *hdev)
 		if (ret)
 			return ret;
 
-		ret = hclge_comm_set_rss_input_tuple(&hdev->nic, &hdev->hw.hw,
-						     false, rss_cfg);
+		ret = hclge_comm_set_rss_input_tuple(&hdev->hw.hw, rss_cfg);
 		if (ret)
 			return ret;
 	}
@@ -2598,7 +2597,7 @@ static int hclgevf_pci_init(struct hclgevf_dev *hdev)
 	if (!hw->hw.io_base) {
 		dev_err(&pdev->dev, "can't map configuration register space\n");
 		ret = -ENOMEM;
-		goto err_clr_master;
+		goto err_release_regions;
 	}
 
 	ret = hclgevf_dev_mem_map(hdev);
@@ -2609,8 +2608,7 @@ static int hclgevf_pci_init(struct hclgevf_dev *hdev)
 
 err_unmap_io_base:
 	pci_iounmap(pdev, hdev->hw.hw.io_base);
-err_clr_master:
-	pci_clear_master(pdev);
+err_release_regions:
 	pci_release_regions(pdev);
 err_disable_device:
 	pci_disable_device(pdev);
@@ -2626,7 +2624,6 @@ static void hclgevf_pci_uninit(struct hclgevf_dev *hdev)
 		devm_iounmap(&pdev->dev, hdev->hw.hw.mem_base);
 
 	pci_iounmap(pdev, hdev->hw.hw.io_base);
-	pci_clear_master(pdev);
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
 }
@@ -2767,7 +2764,8 @@ static int hclgevf_pci_reset(struct hclgevf_dev *hdev)
 	struct pci_dev *pdev = hdev->pdev;
 	int ret = 0;
 
-	if (hdev->reset_type == HNAE3_VF_FULL_RESET &&
+	if ((hdev->reset_type == HNAE3_VF_FULL_RESET ||
+	     hdev->reset_type == HNAE3_FLR_RESET) &&
 	    test_bit(HCLGEVF_STATE_IRQ_INITED, &hdev->state)) {
 		hclgevf_misc_irq_uninit(hdev);
 		hclgevf_uninit_msi(hdev);
@@ -3129,7 +3127,7 @@ static int hclgevf_set_channels(struct hnae3_handle *handle, u32 new_tqps_num,
 
 	hclgevf_update_rss_size(handle, new_tqps_num);
 
-	hclge_comm_get_rss_tc_info(cur_rss_size, hdev->hw_tc_map,
+	hclge_comm_get_rss_tc_info(kinfo->rss_size, hdev->hw_tc_map,
 				   tc_offset, tc_valid, tc_size);
 	ret = hclge_comm_set_rss_tc_mode(&hdev->hw.hw, tc_offset,
 					 tc_valid, tc_size);
@@ -3177,7 +3175,7 @@ static int hclgevf_get_status(struct hnae3_handle *handle)
 
 static void hclgevf_get_ksettings_an_result(struct hnae3_handle *handle,
 					    u8 *auto_neg, u32 *speed,
-					    u8 *duplex)
+					    u8 *duplex, u32 *lane_num)
 {
 	struct hclgevf_dev *hdev = hclgevf_ae_get_hdev(handle);
 
@@ -3429,7 +3427,7 @@ static struct hnae3_ae_algo ae_algovf = {
 	.pdev_id_table = ae_algovf_pci_tbl,
 };
 
-static int hclgevf_init(void)
+static int __init hclgevf_init(void)
 {
 	pr_info("%s is initializing\n", HCLGEVF_NAME);
 
@@ -3444,7 +3442,7 @@ static int hclgevf_init(void)
 	return 0;
 }
 
-static void hclgevf_exit(void)
+static void __exit hclgevf_exit(void)
 {
 	hnae3_unregister_ae_algo(&ae_algovf);
 	destroy_workqueue(hclgevf_wq);

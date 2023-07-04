@@ -196,14 +196,11 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 			return err;
 	}
 
-	if (MLX5_CAP_GEN(dev, vport_group_manager) &&
-	    MLX5_ESWITCH_MANAGER(dev)) {
+	if (MLX5_ESWITCH_MANAGER(dev)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_ESWITCH_FLOW_TABLE);
 		if (err)
 			return err;
-	}
 
-	if (MLX5_ESWITCH_MANAGER(dev)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_ESWITCH);
 		if (err)
 			return err;
@@ -267,8 +264,27 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 			return err;
 	}
 
+	if (MLX5_CAP_GEN(dev, crypto)) {
+		err = mlx5_core_get_caps(dev, MLX5_CAP_CRYPTO);
+		if (err)
+			return err;
+	}
+
 	if (MLX5_CAP_GEN(dev, shampo)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_DEV_SHAMPO);
+		if (err)
+			return err;
+	}
+
+	if (MLX5_CAP_GEN_64(dev, general_obj_types) &
+	    MLX5_GENERAL_OBJ_TYPES_CAP_MACSEC_OFFLOAD) {
+		err = mlx5_core_get_caps(dev, MLX5_CAP_MACSEC);
+		if (err)
+			return err;
+	}
+
+	if (MLX5_CAP_GEN(dev, adv_virtualization)) {
+		err = mlx5_core_get_caps(dev, MLX5_CAP_ADV_VIRTUALIZATION);
 		if (err)
 			return err;
 	}

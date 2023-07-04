@@ -323,16 +323,18 @@ ieee80211_vht_cap_ie_to_sta_vht_cap(struct ieee80211_sub_if_data *sdata,
 	 */
 	switch (vht_cap->cap & IEEE80211_VHT_CAP_MAX_MPDU_MASK) {
 	case IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454:
-		link_sta->sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_11454;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_11454;
 		break;
 	case IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991:
-		link_sta->sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_7991;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_7991;
 		break;
 	case IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895:
 	default:
-		link_sta->sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_3895;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_VHT_3895;
 		break;
 	}
+
+	ieee80211_sta_recalc_aggregates(&link_sta->sta->sta);
 }
 
 /* FIXME: move this to some better location - parses HE/EHT now */
@@ -623,7 +625,7 @@ u32 __ieee80211_vht_handle_opmode(struct ieee80211_sub_if_data *sdata,
 	enum ieee80211_sta_rx_bandwidth new_bw;
 	struct sta_opmode_info sta_opmode = {};
 	u32 changed = 0;
-	u8 nss;
+	u8 nss, cur_nss;
 
 	/* ignore - no support for BF yet */
 	if (opmode & IEEE80211_OPMODE_NOTIF_RX_NSS_TYPE_BF)
@@ -634,10 +636,25 @@ u32 __ieee80211_vht_handle_opmode(struct ieee80211_sub_if_data *sdata,
 	nss += 1;
 
 	if (link_sta->pub->rx_nss != nss) {
-		link_sta->pub->rx_nss = nss;
-		sta_opmode.rx_nss = nss;
-		changed |= IEEE80211_RC_NSS_CHANGED;
-		sta_opmode.changed |= STA_OPMODE_N_SS_CHANGED;
+		cur_nss = link_sta->pub->rx_nss;
+		/* Reset rx_nss and call ieee80211_sta_set_rx_nss() which
+		 * will set the same to max nss value calculated based on capability.
+		 */
+		link_sta->pub->rx_nss = 0;
+		ieee80211_sta_set_rx_nss(link_sta);
+		/* Do not allow an nss change to rx_nss greater than max_nss
+		 * negotiated and capped to APs capability during association.
+		 */
+		if (nss <= link_sta->pub->rx_nss) {
+			link_sta->pub->rx_nss = nss;
+			sta_opmode.rx_nss = nss;
+			changed |= IEEE80211_RC_NSS_CHANGED;
+			sta_opmode.changed |= STA_OPMODE_N_SS_CHANGED;
+		} else {
+			link_sta->pub->rx_nss = cur_nss;
+			pr_warn_ratelimited("Ignoring NSS change in VHT Operating Mode Notification from %pM with invalid nss %d",
+					    link_sta->pub->addr, nss);
+		}
 	}
 
 	switch (opmode & IEEE80211_OPMODE_NOTIF_CHANWIDTH_MASK) {

@@ -9,7 +9,7 @@
  * Copyright 2007, Michael Wu <flamingice@sourmilk.net>
  * Copyright 2007-2010, Intel Corporation
  * Copyright 2017	Intel Deutschland GmbH
- * Copyright(c) 2020-2022 Intel Corporation
+ * Copyright(c) 2020-2023 Intel Corporation
  */
 
 #include <linux/ieee80211.h>
@@ -241,9 +241,11 @@ bool ieee80211_ht_cap_ie_to_sta_ht_cap(struct ieee80211_sub_if_data *sdata,
 	ht_cap.mcs.rx_highest = ht_cap_ie->mcs.rx_highest;
 
 	if (ht_cap.cap & IEEE80211_HT_CAP_MAX_AMSDU)
-		sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_HT_7935;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_HT_7935;
 	else
-		sta->sta.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_HT_3839;
+		link_sta->pub->agg.max_amsdu_len = IEEE80211_MAX_MPDU_LEN_HT_3839;
+
+	ieee80211_sta_recalc_aggregates(&sta->sta);
 
  apply:
 	changed = memcmp(&link_sta->pub->ht_cap, &ht_cap, sizeof(ht_cap));
@@ -299,12 +301,13 @@ bool ieee80211_ht_cap_ie_to_sta_ht_cap(struct ieee80211_sub_if_data *sdata,
 			break;
 		}
 
-		if (smps_mode != sta->sta.smps_mode)
+		if (smps_mode != link_sta->pub->smps_mode)
 			changed = true;
-		sta->sta.smps_mode = smps_mode;
+		link_sta->pub->smps_mode = smps_mode;
 	} else {
-		sta->sta.smps_mode = IEEE80211_SMPS_OFF;
+		link_sta->pub->smps_mode = IEEE80211_SMPS_OFF;
 	}
+
 	return changed;
 }
 
@@ -388,6 +391,37 @@ void ieee80211_ba_session_work(struct work_struct *work)
 
 		tid_tx = sta->ampdu_mlme.tid_start_tx[tid];
 		if (!blocked && tid_tx) {
+			struct txq_info *txqi = to_txq_info(sta->sta.txq[tid]);
+			struct ieee80211_sub_if_data *sdata =
+				vif_to_sdata(txqi->txq.vif);
+			struct fq *fq = &sdata->local->fq;
+
+			spin_lock_bh(&fq->lock);
+
+			/* Allow only frags to be dequeued */
+			set_bit(IEEE80211_TXQ_STOP, &txqi->flags);
+
+			if (!skb_queue_empty(&txqi->frags)) {
+				/* Fragmented Tx is ongoing, wait for it to
+				 * finish. Reschedule worker to retry later.
+				 */
+
+				spin_unlock_bh(&fq->lock);
+				spin_unlock_bh(&sta->lock);
+
+				/* Give the task working on the txq a chance
+				 * to send out the queued frags
+				 */
+				synchronize_net();
+
+				mutex_unlock(&sta->ampdu_mlme.mtx);
+
+				ieee80211_queue_work(&sdata->local->hw, work);
+				return;
+			}
+
+			spin_unlock_bh(&fq->lock);
+
 			/*
 			 * Assign it over to the normal tid_tx array
 			 * where it "goes live".
@@ -568,7 +602,8 @@ void ieee80211_request_smps(struct ieee80211_vif *vif, unsigned int link_id,
 		goto out;
 
 	link->u.mgd.driver_smps_mode = smps_mode;
-	ieee80211_queue_work(&sdata->local->hw, &link->u.mgd.request_smps_work);
+	wiphy_work_queue(sdata->local->hw.wiphy,
+			 &link->u.mgd.request_smps_work);
 out:
 	rcu_read_unlock();
 }

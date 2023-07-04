@@ -12,7 +12,7 @@
 
 #include "cs35l41_hda.h"
 
-static int cs35l41_hda_i2c_probe(struct i2c_client *clt, const struct i2c_device_id *id)
+static int cs35l41_hda_i2c_probe(struct i2c_client *clt)
 {
 	const char *device_name;
 
@@ -33,11 +33,9 @@ static int cs35l41_hda_i2c_probe(struct i2c_client *clt, const struct i2c_device
 				 devm_regmap_init_i2c(clt, &cs35l41_regmap_i2c));
 }
 
-static int cs35l41_hda_i2c_remove(struct i2c_client *clt)
+static void cs35l41_hda_i2c_remove(struct i2c_client *clt)
 {
 	cs35l41_hda_remove(&clt->dev);
-
-	return 0;
 }
 
 static const struct i2c_device_id cs35l41_hda_i2c_id[] = {

@@ -1321,8 +1321,8 @@ static const u32 unused_mib_regs[] = {
 static void bcm_enet_get_drvinfo(struct net_device *netdev,
 				 struct ethtool_drvinfo *drvinfo)
 {
-	strlcpy(drvinfo->driver, bcm_enet_driver_name, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->bus_info, "bcm63xx", sizeof(drvinfo->bus_info));
+	strscpy(drvinfo->driver, bcm_enet_driver_name, sizeof(drvinfo->driver));
+	strscpy(drvinfo->bus_info, "bcm63xx", sizeof(drvinfo->bus_info));
 }
 
 static int bcm_enet_get_sset_count(struct net_device *netdev,
@@ -2784,17 +2784,11 @@ static int bcm_enet_shared_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int bcm_enet_shared_remove(struct platform_device *pdev)
-{
-	return 0;
-}
-
 /* this "shared" driver is needed because both macs share a single
  * address space
  */
 struct platform_driver bcm63xx_enet_shared_driver = {
 	.probe	= bcm_enet_shared_probe,
-	.remove	= bcm_enet_shared_remove,
 	.driver	= {
 		.name	= "bcm63xx_enet_shared",
 		.owner  = THIS_MODULE,

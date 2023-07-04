@@ -106,7 +106,7 @@ int av7110_av_start_record(struct av7110 *av7110, int av,
 	int ret = 0;
 	struct dvb_demux *dvbdmx = dvbdmxfeed->demux;
 
-	dprintk(2, "av7110:%p, , dvb_demux_feed:%p\n", av7110, dvbdmxfeed);
+	dprintk(2, "av7110:%p, dvb_demux_feed:%p\n", av7110, dvbdmxfeed);
 
 	if (av7110->playing || (av7110->rec_mode & av))
 		return -EBUSY;
@@ -823,10 +823,10 @@ static int write_ts_to_decoder(struct av7110 *av7110, int type, const u8 *buf, s
 		av7110_ipack_flush(ipack);
 
 	if (buf[3] & ADAPT_FIELD) {
+		if (buf[4] > len - 1 - 4)
+			return 0;
 		len -= buf[4] + 1;
 		buf += buf[4] + 1;
-		if (!len)
-			return 0;
 	}
 
 	av7110_ipack_instant_repack(buf + 4, len - 4, ipack);

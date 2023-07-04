@@ -35,6 +35,8 @@ struct mlxsw_fw_rev;
 
 unsigned int mlxsw_core_max_ports(const struct mlxsw_core *mlxsw_core);
 
+int mlxsw_core_max_lag(struct mlxsw_core *mlxsw_core, u16 *p_max_lag);
+
 void *mlxsw_core_driver_priv(struct mlxsw_core *mlxsw_core);
 
 struct mlxsw_linecards *mlxsw_core_linecards(struct mlxsw_core *mlxsw_core);
@@ -215,6 +217,14 @@ int mlxsw_reg_trans_write(struct mlxsw_core *mlxsw_core,
 			  mlxsw_reg_trans_cb_t *cb, unsigned long cb_priv);
 int mlxsw_reg_trans_bulk_wait(struct list_head *bulk_list);
 
+typedef void mlxsw_irq_event_cb_t(struct mlxsw_core *mlxsw_core);
+
+int mlxsw_core_irq_event_handler_register(struct mlxsw_core *mlxsw_core,
+					  mlxsw_irq_event_cb_t cb);
+void mlxsw_core_irq_event_handler_unregister(struct mlxsw_core *mlxsw_core,
+					     mlxsw_irq_event_cb_t cb);
+void mlxsw_core_irq_event_handlers_call(struct mlxsw_core *mlxsw_core);
+
 int mlxsw_reg_query(struct mlxsw_core *mlxsw_core,
 		    const struct mlxsw_reg_info *reg, char *payload);
 int mlxsw_reg_write(struct mlxsw_core *mlxsw_core,
@@ -254,14 +264,9 @@ int mlxsw_core_cpu_port_init(struct mlxsw_core *mlxsw_core,
 			     const unsigned char *switch_id,
 			     unsigned char switch_id_len);
 void mlxsw_core_cpu_port_fini(struct mlxsw_core *mlxsw_core);
-void mlxsw_core_port_eth_set(struct mlxsw_core *mlxsw_core, u16 local_port,
-			     void *port_driver_priv, struct net_device *dev);
-void mlxsw_core_port_ib_set(struct mlxsw_core *mlxsw_core, u16 local_port,
-			    void *port_driver_priv);
-void mlxsw_core_port_clear(struct mlxsw_core *mlxsw_core, u16 local_port,
-			   void *port_driver_priv);
-enum devlink_port_type mlxsw_core_port_type_get(struct mlxsw_core *mlxsw_core,
-						u16 local_port);
+void mlxsw_core_port_netdev_link(struct mlxsw_core *mlxsw_core, u16 local_port,
+				 void *port_driver_priv,
+				 struct net_device *dev);
 struct devlink_port *
 mlxsw_core_port_devlink_port_get(struct mlxsw_core *mlxsw_core,
 				 u16 local_port);
@@ -291,6 +296,7 @@ struct mlxsw_swid_config {
 
 struct mlxsw_config_profile {
 	u16	used_max_vepa_channels:1,
+		used_max_lag:1,
 		used_max_mid:1,
 		used_max_pgt:1,
 		used_max_system_port:1,
@@ -306,6 +312,7 @@ struct mlxsw_config_profile {
 		used_kvd_sizes:1,
 		used_cqe_time_stamp_type:1;
 	u8	max_vepa_channels;
+	u16	max_lag;
 	u16	max_mid;
 	u16	max_pgt;
 	u16	max_system_port;
@@ -341,8 +348,6 @@ struct mlxsw_driver {
 		    const struct mlxsw_bus_info *mlxsw_bus_info,
 		    struct netlink_ext_ack *extack);
 	void (*fini)(struct mlxsw_core *mlxsw_core);
-	int (*port_type_set)(struct mlxsw_core *mlxsw_core, u16 local_port,
-			     enum devlink_port_type new_type);
 	int (*port_split)(struct mlxsw_core *mlxsw_core, u16 local_port,
 			  unsigned int count, struct netlink_ext_ack *extack);
 	int (*port_unsplit)(struct mlxsw_core *mlxsw_core, u16 local_port,
@@ -416,8 +421,6 @@ struct mlxsw_driver {
 			     const struct mlxsw_config_profile *profile,
 			     u64 *p_single_size, u64 *p_double_size,
 			     u64 *p_linear_size);
-	int (*params_register)(struct mlxsw_core *mlxsw_core);
-	void (*params_unregister)(struct mlxsw_core *mlxsw_core);
 
 	/* Notify a driver that a timestamped packet was transmitted. Driver
 	 * is responsible for freeing the passed-in SKB.
@@ -442,8 +445,6 @@ u32 mlxsw_core_read_utc_sec(struct mlxsw_core *mlxsw_core);
 u32 mlxsw_core_read_utc_nsec(struct mlxsw_core *mlxsw_core);
 
 bool mlxsw_core_sdq_supports_cqe_v2(struct mlxsw_core *mlxsw_core);
-
-void mlxsw_core_emad_string_tlv_enable(struct mlxsw_core *mlxsw_core);
 
 bool mlxsw_core_res_valid(struct mlxsw_core *mlxsw_core,
 			  enum mlxsw_res_id res_id);

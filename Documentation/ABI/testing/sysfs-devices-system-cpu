@@ -296,7 +296,7 @@ Description:	Processor frequency boosting control
 
 		This switch controls the boost setting for the whole system.
 		Boosting allows the CPU and the firmware to run at a frequency
-		beyond it's nominal limit.
+		beyond its nominal limit.
 
 		More details can be found in
 		Documentation/admin-guide/pm/cpufreq.rst
@@ -670,7 +670,7 @@ Description:	Preferred MTE tag checking mode
 		"async"	  	  Prefer asynchronous mode
 		================  ==============================================
 
-		See also: Documentation/arm64/memory-tagging-extension.rst
+		See also: Documentation/arch/arm64/memory-tagging-extension.rst
 
 What:		/sys/devices/system/cpu/nohz_full
 Date:		Apr 2015

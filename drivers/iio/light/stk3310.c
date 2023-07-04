@@ -586,8 +586,7 @@ out:
 	return IRQ_HANDLED;
 }
 
-static int stk3310_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
+static int stk3310_probe(struct i2c_client *client)
 {
 	int ret;
 	struct iio_dev *indio_dev;
@@ -649,14 +648,12 @@ err_standby:
 	return ret;
 }
 
-static int stk3310_remove(struct i2c_client *client)
+static void stk3310_remove(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 
 	iio_device_unregister(indio_dev);
 	stk3310_set_state(iio_priv(indio_dev), STK3310_STATE_STANDBY);
-
-	return 0;
 }
 
 static int stk3310_suspend(struct device *dev)
@@ -717,7 +714,7 @@ static struct i2c_driver stk3310_driver = {
 		.pm = pm_sleep_ptr(&stk3310_pm_ops),
 		.acpi_match_table = ACPI_PTR(stk3310_acpi_id),
 	},
-	.probe =            stk3310_probe,
+	.probe =        stk3310_probe,
 	.remove =           stk3310_remove,
 	.id_table =         stk3310_i2c_id,
 };

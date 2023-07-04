@@ -1393,9 +1393,9 @@ out_unlock:
 	return ret;
 }
 
-static int adv7180_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
+static int adv7180_probe(struct i2c_client *client)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(client);
 	struct device_node *np = client->dev.of_node;
 	struct adv7180_state *state;
 	struct v4l2_subdev *sd;
@@ -1514,7 +1514,7 @@ err_unregister_csi_client:
 	return ret;
 }
 
-static int adv7180_remove(struct i2c_client *client)
+static void adv7180_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct adv7180_state *state = to_state(sd);
@@ -1534,8 +1534,6 @@ static int adv7180_remove(struct i2c_client *client)
 	adv7180_set_power_pin(state, false);
 
 	mutex_destroy(&state->mutex);
-
-	return 0;
 }
 
 static const struct i2c_device_id adv7180_id[] = {
@@ -1612,7 +1610,7 @@ static struct i2c_driver adv7180_driver = {
 		   .pm = ADV7180_PM_OPS,
 		   .of_match_table = of_match_ptr(adv7180_of_id),
 		   },
-	.probe = adv7180_probe,
+	.probe_new = adv7180_probe,
 	.remove = adv7180_remove,
 	.id_table = adv7180_id,
 };

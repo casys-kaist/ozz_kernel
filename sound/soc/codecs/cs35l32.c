@@ -260,7 +260,7 @@ static const struct regmap_config cs35l32_regmap = {
 	.volatile_reg = cs35l32_volatile_register,
 	.readable_reg = cs35l32_readable_register,
 	.precious_reg = cs35l32_precious_register,
-	.cache_type = REGCACHE_RBTREE,
+	.cache_type = REGCACHE_MAPLE,
 
 	.use_single_read = true,
 	.use_single_write = true,
@@ -497,14 +497,12 @@ err_supplies:
 	return ret;
 }
 
-static int cs35l32_i2c_remove(struct i2c_client *i2c_client)
+static void cs35l32_i2c_remove(struct i2c_client *i2c_client)
 {
 	struct cs35l32_private *cs35l32 = i2c_get_clientdata(i2c_client);
 
 	/* Hold down reset */
 	gpiod_set_value_cansleep(cs35l32->reset_gpio, 0);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -574,7 +572,7 @@ static struct i2c_driver cs35l32_i2c_driver = {
 		   .of_match_table = cs35l32_of_match,
 		   },
 	.id_table = cs35l32_id,
-	.probe_new = cs35l32_i2c_probe,
+	.probe = cs35l32_i2c_probe,
 	.remove = cs35l32_i2c_remove,
 };
 

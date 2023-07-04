@@ -338,8 +338,7 @@ out:
 	return ret;
 }
 
-static int pa12203001_probe(struct i2c_client *client,
-			    const struct i2c_device_id *id)
+static int pa12203001_probe(struct i2c_client *client)
 {
 	struct pa12203001_data *data;
 	struct iio_dev *indio_dev;
@@ -394,7 +393,7 @@ out_err:
 	return ret;
 }
 
-static int pa12203001_remove(struct i2c_client *client)
+static void pa12203001_remove(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	int ret;
@@ -408,8 +407,6 @@ static int pa12203001_remove(struct i2c_client *client)
 	if (ret)
 		dev_warn(&client->dev, "Failed to power down (%pe)\n",
 			 ERR_PTR(ret));
-
-	return 0;
 }
 
 #if defined(CONFIG_PM_SLEEP) || defined(CONFIG_PM)

@@ -14,6 +14,9 @@
 
 #include <linux/types.h>
 
+/* 64-bit per app capabilities */
+#define NFP_NET_APP_CAP_SP_INDIFF	BIT_ULL(0) /* indifferent to port speed */
+
 /* Configuration BAR size.
  *
  * The configuration BAR is 8K in size, but due to
@@ -45,6 +48,7 @@
 #define NFP_NET_META_CSUM		6 /* checksum complete type */
 #define NFP_NET_META_CONN_HANDLE	7
 #define NFP_NET_META_RESYNC_INFO	8 /* RX resync info request */
+#define NFP_NET_META_IPSEC		9 /* IPsec SA index for tx and rx */
 
 #define NFP_META_PORT_ID_CTRL		~0U
 
@@ -52,6 +56,8 @@
 #define NFP_NET_META_VLAN_SIZE			4
 #define NFP_NET_META_PORTID_SIZE		4
 #define NFP_NET_META_CONN_HANDLE_SIZE		8
+#define NFP_NET_META_IPSEC_SIZE			4
+#define NFP_NET_META_IPSEC_FIELD_SIZE		12
 /* Hash type pre-pended when a RSS hash was computed */
 #define NFP_NET_RSS_NONE		0
 #define NFP_NET_RSS_IPV4		1
@@ -193,6 +199,10 @@
 #define   NFP_NET_CFG_STS_LINK_RATE_40G		  5
 #define   NFP_NET_CFG_STS_LINK_RATE_50G		  6
 #define   NFP_NET_CFG_STS_LINK_RATE_100G	  7
+/* NSP Link rate is a 16-bit word. It's determined by NSP and
+ * written to CFG BAR by NFP driver.
+ */
+#define NFP_NET_CFG_STS_NSP_LINK_RATE	0x0036
 #define NFP_NET_CFG_CAP			0x0038
 #define NFP_NET_CFG_MAX_TXRINGS		0x003c
 #define NFP_NET_CFG_MAX_RXRINGS		0x0040
@@ -250,10 +260,20 @@
 #define   NFP_NET_CFG_BPF_CFG_MASK	7ULL
 #define   NFP_NET_CFG_BPF_ADDR_MASK	(~NFP_NET_CFG_BPF_CFG_MASK)
 
-/* 40B reserved for future use (0x0098 - 0x00c0)
+/* 3 words reserved for extended ctrl words (0x0098 - 0x00a4)
+ * 3 words reserved for extended cap words (0x00a4 - 0x00b0)
+ * Currently only one word is used, can be extended in future.
  */
-#define NFP_NET_CFG_RESERVED		0x0098
-#define NFP_NET_CFG_RESERVED_SZ		0x0028
+#define NFP_NET_CFG_CTRL_WORD1		0x0098
+#define   NFP_NET_CFG_CTRL_PKT_TYPE	  (0x1 << 0) /* Pkttype offload */
+#define   NFP_NET_CFG_CTRL_IPSEC	  (0x1 << 1) /* IPsec offload */
+#define   NFP_NET_CFG_CTRL_MCAST_FILTER	  (0x1 << 2) /* Multicast Filter */
+
+#define NFP_NET_CFG_CAP_WORD1		0x00a4
+
+/* 16B reserved for future use (0x00b0 - 0x00c0) */
+#define NFP_NET_CFG_RESERVED		0x00b0
+#define NFP_NET_CFG_RESERVED_SZ		0x0010
 
 /* RSS configuration (0x0100 - 0x01ac):
  * Used only when NFP_NET_CFG_CTRL_RSS is enabled
@@ -383,16 +403,19 @@
  */
 #define NFP_NET_CFG_MBOX_BASE		0x1800
 #define NFP_NET_CFG_MBOX_VAL_MAX_SZ	0x1F8
-
 #define NFP_NET_CFG_MBOX_SIMPLE_CMD	0x0
 #define NFP_NET_CFG_MBOX_SIMPLE_RET	0x4
 #define NFP_NET_CFG_MBOX_SIMPLE_VAL	0x8
 
 #define NFP_NET_CFG_MBOX_CMD_CTAG_FILTER_ADD 1
 #define NFP_NET_CFG_MBOX_CMD_CTAG_FILTER_KILL 2
-
+#define NFP_NET_CFG_MBOX_CMD_IPSEC 3
 #define NFP_NET_CFG_MBOX_CMD_PCI_DSCP_PRIOMAP_SET	5
 #define NFP_NET_CFG_MBOX_CMD_TLV_CMSG			6
+#define NFP_NET_CFG_MBOX_CMD_DCB_UPDATE			7
+
+#define NFP_NET_CFG_MBOX_CMD_MULTICAST_ADD		8
+#define NFP_NET_CFG_MBOX_CMD_MULTICAST_DEL		9
 
 /* VLAN filtering using general use mailbox
  * %NFP_NET_CFG_VLAN_FILTER:		Base address of VLAN filter mailbox
@@ -404,6 +427,17 @@
 #define  NFP_NET_CFG_VLAN_FILTER_VID	NFP_NET_CFG_VLAN_FILTER
 #define  NFP_NET_CFG_VLAN_FILTER_PROTO	 (NFP_NET_CFG_VLAN_FILTER + 2)
 #define NFP_NET_CFG_VLAN_FILTER_SZ	 0x0004
+
+/* Multicast filtering using general use mailbox
+ * %NFP_NET_CFG_MULTICAST:		Base address of Multicast filter mailbox
+ * %NFP_NET_CFG_MULTICAST_MAC_HI:	High 32-bits of Multicast MAC address
+ * %NFP_NET_CFG_MULTICAST_MAC_LO:	Low 16-bits of Multicast MAC address
+ * %NFP_NET_CFG_MULTICAST_SZ:		Size of the Multicast filter mailbox in bytes
+ */
+#define NFP_NET_CFG_MULTICAST		NFP_NET_CFG_MBOX_SIMPLE_VAL
+#define NFP_NET_CFG_MULTICAST_MAC_HI	NFP_NET_CFG_MULTICAST
+#define NFP_NET_CFG_MULTICAST_MAC_LO	(NFP_NET_CFG_MULTICAST + 6)
+#define NFP_NET_CFG_MULTICAST_SZ	0x0006
 
 /* TLV capabilities
  * %NFP_NET_CFG_TLV_TYPE:	Offset of type within the TLV

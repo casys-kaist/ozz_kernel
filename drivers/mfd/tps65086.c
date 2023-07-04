@@ -61,8 +61,7 @@ static const struct of_device_id tps65086_of_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, tps65086_of_match_table);
 
-static int tps65086_probe(struct i2c_client *client,
-			  const struct i2c_device_id *ids)
+static int tps65086_probe(struct i2c_client *client)
 {
 	struct tps65086 *tps;
 	unsigned int version;
@@ -111,14 +110,12 @@ static int tps65086_probe(struct i2c_client *client,
 	return ret;
 }
 
-static int tps65086_remove(struct i2c_client *client)
+static void tps65086_remove(struct i2c_client *client)
 {
 	struct tps65086 *tps = i2c_get_clientdata(client);
 
 	if (tps->irq > 0)
 		regmap_del_irq_chip(tps->irq, tps->irq_data);
-
-	return 0;
 }
 
 static const struct i2c_device_id tps65086_id_table[] = {

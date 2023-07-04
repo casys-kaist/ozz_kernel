@@ -2,7 +2,7 @@
 /*
  *	PCI Class, Vendor and Device IDs
  *
- *	Please keep sorted.
+ *	Please keep sorted by numeric Vendor ID and Device ID.
  *
  *	Do not add new entries to this file unless the definitions
  *	are shared between multiple drivers.
@@ -74,6 +74,9 @@
 #define PCI_CLASS_COMMUNICATION_MULTISERIAL 0x0702
 #define PCI_CLASS_COMMUNICATION_MODEM	0x0703
 #define PCI_CLASS_COMMUNICATION_OTHER	0x0780
+
+/* Interface for SERIAL/MODEM */
+#define PCI_SERIAL_16550_COMPATIBLE	0x02
 
 #define PCI_BASE_CLASS_SYSTEM		0x08
 #define PCI_CLASS_SYSTEM_PIC		0x0800
@@ -148,12 +151,20 @@
 #define PCI_CLASS_SP_DPIO		0x1100
 #define PCI_CLASS_SP_OTHER		0x1180
 
+#define PCI_BASE_CLASS_ACCELERATOR	0x12
+#define PCI_CLASS_ACCELERATOR_PROCESSING	0x1200
+
 #define PCI_CLASS_OTHERS		0xff
 
 /* Vendors and devices.  Sort key: vendor first, device next. */
 #define PCI_VENDOR_ID_PCI_SIG		0x0001
 
 #define PCI_VENDOR_ID_LOONGSON		0x0014
+
+#define PCI_DEVICE_ID_LOONGSON_HDA      0x7a07
+#define PCI_DEVICE_ID_LOONGSON_HDMI     0x7a37
+
+#define PCI_VENDOR_ID_SOLIDIGM		0x025e
 
 #define PCI_VENDOR_ID_TTTECH		0x0357
 #define PCI_DEVICE_ID_TTTECH_MC322	0x000a
@@ -564,6 +575,8 @@
 #define PCI_DEVICE_ID_AMD_19H_M50H_DF_F3 0x166d
 #define PCI_DEVICE_ID_AMD_19H_M60H_DF_F3 0x14e3
 #define PCI_DEVICE_ID_AMD_19H_M70H_DF_F3 0x14f3
+#define PCI_DEVICE_ID_AMD_19H_M78H_DF_F3 0x12fb
+#define PCI_DEVICE_ID_AMD_MI200_DF_F3	0x14d3
 #define PCI_DEVICE_ID_AMD_CNB17H_F3	0x1703
 #define PCI_DEVICE_ID_AMD_LANCE		0x2000
 #define PCI_DEVICE_ID_AMD_LANCE_HOME	0x2001
@@ -3009,6 +3022,8 @@
 #define PCI_DEVICE_ID_INTEL_VMD_9A0B	0x9a0b
 #define PCI_DEVICE_ID_INTEL_S21152BB	0xb152
 
+#define PCI_VENDOR_ID_WANGXUN		0x8088
+
 #define PCI_VENDOR_ID_SCALEMP		0x8686
 #define PCI_DEVICE_ID_SCALEMP_VSMP_CTL	0x1010
 
@@ -3088,6 +3103,8 @@
 #define PCI_DEVICE_ID_NETMOS_9922	0x9922
 
 #define PCI_VENDOR_ID_3COM_2		0xa727
+
+#define PCI_VENDOR_ID_SOLIDRUN		0xd063
 
 #define PCI_VENDOR_ID_DIGIUM		0xd161
 #define PCI_DEVICE_ID_DIGIUM_HFC4S	0xb410

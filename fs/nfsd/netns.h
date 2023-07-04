@@ -10,6 +10,7 @@
 
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
+#include <linux/filelock.h>
 #include <linux/percpu_counter.h>
 #include <linux/siphash.h>
 
@@ -192,6 +193,10 @@ struct nfsd_net {
 
 	atomic_t		nfs4_client_count;
 	int			nfs4_max_clients;
+
+	atomic_t		nfsd_courtesy_clients;
+	struct shrinker		nfsd_client_shrinker;
+	struct work_struct	nfsd_shrinker_work;
 };
 
 /* Simple check to find out if a given net was properly initialized */

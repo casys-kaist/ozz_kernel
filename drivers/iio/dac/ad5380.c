@@ -546,9 +546,9 @@ static inline void ad5380_spi_unregister_driver(void)
 
 #if IS_ENABLED(CONFIG_I2C)
 
-static int ad5380_i2c_probe(struct i2c_client *i2c,
-			    const struct i2c_device_id *id)
+static int ad5380_i2c_probe(struct i2c_client *i2c)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(i2c);
 	struct regmap *regmap;
 
 	regmap = devm_regmap_init_i2c(i2c, &ad5380_regmap_config);
@@ -559,11 +559,9 @@ static int ad5380_i2c_probe(struct i2c_client *i2c,
 	return ad5380_probe(&i2c->dev, regmap, id->driver_data, id->name);
 }
 
-static int ad5380_i2c_remove(struct i2c_client *i2c)
+static void ad5380_i2c_remove(struct i2c_client *i2c)
 {
 	ad5380_remove(&i2c->dev);
-
-	return 0;
 }
 
 static const struct i2c_device_id ad5380_i2c_ids[] = {

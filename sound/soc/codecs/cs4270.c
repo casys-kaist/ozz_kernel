@@ -650,13 +650,11 @@ static const struct regmap_config cs4270_regmap = {
  * This function puts the chip into low power mode when the i2c device
  * is removed.
  */
-static int cs4270_i2c_remove(struct i2c_client *i2c_client)
+static void cs4270_i2c_remove(struct i2c_client *i2c_client)
 {
 	struct cs4270_private *cs4270 = i2c_get_clientdata(i2c_client);
 
 	gpiod_set_value_cansleep(cs4270->reset_gpio, 0);
-
-	return 0;
 }
 
 /**
@@ -753,7 +751,7 @@ static struct i2c_driver cs4270_i2c_driver = {
 		.of_match_table = cs4270_of_match,
 	},
 	.id_table = cs4270_id,
-	.probe_new = cs4270_i2c_probe,
+	.probe = cs4270_i2c_probe,
 	.remove = cs4270_i2c_remove,
 };
 

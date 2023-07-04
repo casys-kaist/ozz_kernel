@@ -918,8 +918,8 @@ static int cs35l36_dai_set_sysclk(struct snd_soc_dai *dai, int clk_id,
 		fs1 = CS35L36_FS1_DEFAULT_VAL;
 		fs2 = CS35L36_FS2_DEFAULT_VAL;
 	} else {
-		fs1 = 3 * ((CS35L36_FS_NOM_6MHZ * 4 + freq - 1) / freq) + 4;
-		fs2 = 5 * ((CS35L36_FS_NOM_6MHZ * 4 + freq - 1) / freq) + 4;
+		fs1 = 3 * DIV_ROUND_UP(CS35L36_FS_NOM_6MHZ * 4, freq) + 4;
+		fs2 = 5 * DIV_ROUND_UP(CS35L36_FS_NOM_6MHZ * 4, freq) + 4;
 	}
 
 	regmap_write(cs35l36->regmap, CS35L36_TESTKEY_CTRL,
@@ -1910,7 +1910,7 @@ err_disable_regs:
 	return ret;
 }
 
-static int cs35l36_i2c_remove(struct i2c_client *client)
+static void cs35l36_i2c_remove(struct i2c_client *client)
 {
 	struct cs35l36_private *cs35l36 = i2c_get_clientdata(client);
 
@@ -1924,8 +1924,6 @@ static int cs35l36_i2c_remove(struct i2c_client *client)
 		gpiod_set_value_cansleep(cs35l36->reset_gpio, 0);
 
 	regulator_bulk_disable(cs35l36->num_supplies, cs35l36->supplies);
-
-	return 0;
 }
 static const struct of_device_id cs35l36_of_match[] = {
 	{.compatible = "cirrus,cs35l36"},
@@ -1946,7 +1944,7 @@ static struct i2c_driver cs35l36_i2c_driver = {
 		.of_match_table = cs35l36_of_match,
 	},
 	.id_table = cs35l36_id,
-	.probe_new = cs35l36_i2c_probe,
+	.probe = cs35l36_i2c_probe,
 	.remove = cs35l36_i2c_remove,
 };
 module_i2c_driver(cs35l36_i2c_driver);

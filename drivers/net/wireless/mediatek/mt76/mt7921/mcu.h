@@ -41,7 +41,7 @@ enum {
 struct mt7921_mcu_eeprom_info {
 	__le32 addr;
 	__le32 valid;
-	u8 data[16];
+	u8 data[MT7921_EEPROM_BLOCK_SIZE];
 } __packed;
 
 #define MT_RA_RATE_NSS			GENMASK(8, 6)
@@ -50,21 +50,10 @@ struct mt7921_mcu_eeprom_info {
 #define MT_RA_RATE_DCM_EN		BIT(4)
 #define MT_RA_RATE_BW			GENMASK(14, 13)
 
-struct mt7921_mcu_uni_event {
-	u8 cid;
-	u8 pad[3];
-	__le32 status; /* 0: success, others: fail */
-} __packed;
-
 enum {
 	MT_EBF = BIT(0),	/* explicit beamforming */
 	MT_IBF = BIT(1)		/* implicit beamforming */
 };
-
-struct mt7921_mcu_reg_event {
-	__le32 reg;
-	__le32 val;
-} __packed;
 
 struct mt7921_mcu_ant_id_config {
 	u8 ant_id[4];
