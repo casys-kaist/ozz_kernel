@@ -6,6 +6,7 @@
 #include <linux/kallsyms.h>
 #include <linux/qcsched/hcall.h>
 #include <linux/lockdep.h>
+#include <asm/preempt.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Dae R. Jeong");
@@ -23,6 +24,11 @@ static struct lockdep_map *whitelist[] = {
 	&__fs_reclaim_map,
 #endif
 };
+
+// NOTE: The Linux commit e57ef2ed9 changed the memoryu layout of
+// per-cpu variables.
+#define current_task (pcpu_hot.current_task)
+#define __preempt_count (pcpu_hot.preempt_count)
 
 static void vmihelper_notify_lockdep_whitelist(void)
 {
