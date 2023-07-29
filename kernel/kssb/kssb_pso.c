@@ -144,22 +144,25 @@ static void do_buffer_flush(uint64_t aligned_addr)
 	struct kssb_buffer_entry *entry;
 	struct hlist_node *tmp;
 	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	bool flushed = false;
 	bool flush_all = !aligned_addr;
-
-	profile_flush(aligned_addr);
 
 	hash_for_each_safe(pcpu_buffer->table, bkt, tmp, entry, hlist) {
 		// We just need to keep the stores' order only for
 		// those having the same destination
-		if (flush_all || entry->access.aligned_addr == aligned_addr)
+		if (flush_all || entry->access.aligned_addr == aligned_addr) {
+			flushed = true;
 			flush_single_entry(entry);
+		}
 	}
 	BUG_ON(flush_all && !hash_empty(pcpu_buffer->table));
 
-	if (flush_all) {
+	if (flushed)
+		profile_flush(aligned_addr);
+
+	if (flush_all)
 		// Now the store buffer does not contain any entries.
 		reset_context();
-	}
 }
 
 static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
