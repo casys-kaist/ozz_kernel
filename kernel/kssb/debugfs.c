@@ -70,6 +70,26 @@ static struct file_operations kssb_do_profile_fops = {
 	.write = do_profile_write,
 };
 
+static int kssb_emulated_inst_open(struct inode *inode, struct file *filp)
+{
+	return single_open(filp, profile_emulated_inst_show, NULL);
+}
+
+static ssize_t emulated_inst_write(struct file *filp, const char __user *ubuf,
+				   size_t cnt, loff_t *ppos)
+{
+	profile_reset_emulated_inst();
+	return 0;
+}
+
+static struct file_operations kssb_emulated_inst_fops = {
+	.open = kssb_emulated_inst_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release,
+	.write = emulated_inst_write,
+};
+
 int __init kssb_debugfs_init(void)
 {
 	kssb_debugfs_dir = debugfs_create_dir("kssb", 0);
@@ -77,6 +97,8 @@ int __init kssb_debugfs_init(void)
 			    &kssb_stats_fops);
 	debugfs_create_file("do_profile", 0666, kssb_debugfs_dir, NULL,
 			    &kssb_do_profile_fops);
+	debugfs_create_file("emulated_inst", 0666, kssb_debugfs_dir, NULL,
+			    &kssb_emulated_inst_fops);
 	return 0;
 }
 

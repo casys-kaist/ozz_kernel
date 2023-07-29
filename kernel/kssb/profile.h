@@ -3,6 +3,7 @@
 
 #ifdef CONFIG_KSSB_PROFILE
 #include <linux/atomic.h>
+#include <linux/module.h>
 
 #include "kssb.h"
 
@@ -23,6 +24,8 @@ void profile_flush(uint64_t);
 void profile_retchk(void *);
 void profile_funcentry(void *);
 void profile_reset(void);
+int profile_emulated_inst_show(struct seq_file *m, void *v);
+void profile_reset_emulated_inst(void);
 #else
 #define profile_load(...) \
 	do {              \
@@ -41,6 +44,12 @@ void profile_reset(void);
 	} while (0)
 #define profile_funcentry(...) \
 	do {                   \
+	} while (0)
+#define profile_print_emulated_inst(...) \
+	do {                             \
+	} while (0)
+#define profile_reset_emulated_inst(...) \
+	do {                             \
 	} while (0)
 #endif
 
