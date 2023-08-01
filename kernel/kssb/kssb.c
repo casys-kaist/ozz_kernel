@@ -53,6 +53,20 @@ void reclaim_entry(struct kssb_buffer_entry *entry)
 	__reclaim_entry(entry, llist);
 }
 
+static int lookup_flush_table(struct kssb_flush_vector *vector,
+			      unsigned long inst)
+{
+	struct kssb_flush_table_entry *entry;
+	// XXX: The current implementation dose not check whether it
+	// contains two different entries for the same instructions. We
+	// need to be careful not to insert such two entries.
+	hash_for_each_possible(vector->table, entry, hlist, inst) {
+		if (entry->inst == inst)
+			return entry->value;
+	}
+	return -1;
+}
+
 int flush_vector_next(unsigned long inst)
 {
 	struct kssb_flush_vector *vector;
@@ -63,6 +77,12 @@ int flush_vector_next(unsigned long inst)
 	vector = smp_load_acquire(&flush_vector);
 	if (!vector || !vector->size || !vector->vector)
 		goto unlock;
+
+	index = lookup_flush_table(vector, inst);
+	if (unlikely(index >= 0)) {
+		ret = index;
+		goto unlock;
+	}
 
 	// Let's make retriveing the flush vector more reliable. If
 	// the return address of the kssb callbacks is given, index
@@ -89,6 +109,8 @@ static void free_flush_vector(struct rcu_head *rcu)
 	struct kssb_flush_vector *vector =
 		container_of(rcu, struct kssb_flush_vector, rcu);
 	printk_debug(KERN_INFO "Cleaning up the flush_vector\n");
+	kfree(vector->raw_table);
+	kfree(vector->vector);
 	kfree(vector);
 }
 
@@ -101,37 +123,84 @@ static void cleanup_flush_vector(void)
 	call_rcu(&vector->rcu, free_flush_vector);
 }
 
-SYSCALL_DEFINE2(ssb_feedinput, unsigned long, uvector, size_t, size)
+static struct kssb_flush_vector *alloc_flush_vector(void __user *vectorp,
+						    size_t vector_size,
+						    void __user *tablep,
+						    size_t table_count)
 {
 	struct kssb_flush_vector *vector;
-	void __user *vectorp = (void __user *)uvector;
-	int total_bytes = sizeof(vector->vector[0]) * size;
-
-	// TODO: prevent multiple user threads from calling
-	// ssb_feedinput() at the same time
-
-	// Destory the flush vector first if already exists
-	cleanup_flush_vector();
-	if (!total_bytes)
-		return 0;
+	int vector_bytes = sizeof(vector->vector[0]) * vector_size;
+	int table_bytes = sizeof(struct kssb_flush_table_entry) * table_count;
+	void *err = ERR_PTR(-ENOMEM);
+	struct kssb_flush_table_entry *table_entry;
+	int i;
 
 	vector = (struct kssb_flush_vector *)kmalloc(sizeof(*vector),
 						     GFP_KERNEL);
-	vector->vector = (int *)kmalloc(total_bytes, GFP_KERNEL);
-	if (copy_from_user(vector->vector, vectorp, total_bytes)) {
-		kfree(vector->vector);
-		kfree(vector);
-		return -EINVAL;
-	}
-	atomic_set(&vector->index, 0);
-	vector->size = size;
+	if (!vector)
+		goto err1;
+	vector->vector = (int *)kmalloc(vector_bytes, GFP_KERNEL);
+	if (!vector->vector)
+		goto err2;
+	vector->raw_table = (void *)kmalloc(table_bytes, GFP_KERNEL);
+	if (!vector->raw_table)
+		goto err3;
 
+	if (copy_from_user(vector->vector, vectorp, vector_bytes))
+		goto err4;
+	if (copy_from_user(vector->raw_table, tablep, table_bytes))
+		goto err4;
+
+	atomic_set(&vector->index, 0);
+	vector->size = vector_size;
+	vector->count = table_count;
+	hash_init(vector->table);
+	for (i = 0; i < table_count; i++) {
+		table_entry = &(
+			(struct kssb_flush_table_entry *)vector->raw_table)[i];
+		hash_add(vector->table, &(table_entry->hlist),
+			 table_entry->inst);
+	}
+
+	return vector;
+
+err4:
+	err = ERR_PTR(-EINVAL);
+	kfree(vector->raw_table);
+err3:
+	kfree(vector->vector);
+err2:
+	kfree(vector);
+err1:
+	return err;
+}
+
+SYSCALL_DEFINE4(ssb_feedinput, unsigned long, uvector, size_t, vector_size,
+		unsigned long, utable, int, table_count)
+{
+	struct kssb_flush_vector *vector;
+	void __user *vectorp = (void __user *)uvector;
+	void __user *tablep = (void __user *)utable;
+
+	// TODO: prevent multiple user threads from calling
+	// ssb_feedinput() at the same time using a lock
+
+	// Destory the flush vector first if already exists
+	cleanup_flush_vector();
+	if (!vector_size)
+		// We only reset the flush vector if vector_bytes == 0
+		return 0;
+
+	vector = alloc_flush_vector(vectorp, vector_size, tablep, table_count);
+	if (IS_ERR(vector))
+		return PTR_ERR(vector);
+
+	printk_debug(KERN_INFO
+		     "Allocated flush_vector (vector: %d, table: %d)\n",
+		     vector_size, table_count);
 	// Let's allow others to see the flush vector. Paired with
 	// smp_load_acquire() in flush_vector_next().
 	smp_store_release(&flush_vector, vector);
-
-	printk_debug(KERN_INFO "Allocating flush_vector (size: %d)\n", size);
-
 	return 0;
 }
 

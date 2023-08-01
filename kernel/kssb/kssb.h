@@ -5,6 +5,7 @@
 #include <linux/llist.h>
 #include <linux/init.h>
 #include <linux/sched.h>
+#include <linux/hashtable.h>
 
 #ifdef __DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
@@ -42,11 +43,23 @@ struct kssb_buffer_entry {
 struct kssb_buffer_entry *new_entry(void);
 void reclaim_entry(struct kssb_buffer_entry *entry);
 
+struct kssb_flush_table_entry {
+	unsigned long inst;
+	int value;
+	struct hlist_node hlist;
+};
+
 struct kssb_flush_vector {
 	struct rcu_head rcu;
+	// Vector interface
 	int *vector;
 	size_t size;
 	atomic_t index;
+	// Table interface
+#define FLUSH_TABLE_BITS 10
+	DECLARE_HASHTABLE(table, FLUSH_TABLE_BITS);
+	void *raw_table;
+	int count;
 };
 
 int flush_vector_next(unsigned long);
