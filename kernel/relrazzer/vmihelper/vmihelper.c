@@ -17,11 +17,18 @@ extern volatile char __ssb_do_emulate;
 
 #ifdef CONFIG_LOCKDEP
 extern struct lockdep_map __fs_reclaim_map;
+extern struct lockdep_map rcu_lock_map;
+extern struct lockdep_map rcu_bh_lock_map;
+extern struct lockdep_map rcu_sched_lock_map;
+extern struct lockdep_map rcu_callback_map;
+extern struct lockdep_map __mmu_notifier_invalidate_range_start_map;
 #endif
 
 static struct lockdep_map *whitelist[] = {
 #ifdef CONFIG_LOCKDEP
-	&__fs_reclaim_map,
+	&__fs_reclaim_map, &rcu_lock_map,
+	&rcu_bh_lock_map,  &rcu_sched_lock_map,
+	&rcu_callback_map, &__mmu_notifier_invalidate_range_start_map,
 #endif
 };
 
