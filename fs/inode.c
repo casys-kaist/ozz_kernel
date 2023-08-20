@@ -16,7 +16,6 @@
 #include <linux/fsnotify.h>
 #include <linux/mount.h>
 #include <linux/posix_acl.h>
-#include <linux/prefetch.h>
 #include <linux/buffer_head.h> /* for inode_has_buffers */
 #include <linux/ratelimit.h>
 #include <linux/list_lru.h>
@@ -1041,8 +1040,6 @@ struct inode *new_inode(struct super_block *sb)
 {
 	struct inode *inode;
 
-	spin_lock_prefetch(&sb->s_inode_list_lock);
-
 	inode = new_inode_pseudo(sb);
 	if (inode)
 		inode_sb_list_add(inode);
@@ -1156,8 +1153,10 @@ lock:
  */
 void lock_two_nondirectories(struct inode *inode1, struct inode *inode2)
 {
-	WARN_ON_ONCE(S_ISDIR(inode1->i_mode));
-	WARN_ON_ONCE(S_ISDIR(inode2->i_mode));
+	if (inode1)
+		WARN_ON_ONCE(S_ISDIR(inode1->i_mode));
+	if (inode2)
+		WARN_ON_ONCE(S_ISDIR(inode2->i_mode));
 	lock_two_inodes(inode1, inode2, I_MUTEX_NORMAL, I_MUTEX_NONDIR2);
 }
 EXPORT_SYMBOL(lock_two_nondirectories);

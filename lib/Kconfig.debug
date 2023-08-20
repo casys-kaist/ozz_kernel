@@ -1203,7 +1203,7 @@ config WQ_CPU_INTENSIVE_REPORT
 	help
 	  Say Y here to enable reporting of concurrency-managed per-cpu work
 	  items that hog CPUs for longer than
-	  workqueue.cpu_intensive_threshold_us. Workqueue automatically
+	  workqueue.cpu_intensive_thresh_us. Workqueue automatically
 	  detects and excludes them from concurrency management to prevent
 	  them from stalling other per-cpu work items. Occassional
 	  triggering may not necessarily indicate a problem. Repeated
@@ -2742,7 +2742,7 @@ config STACKINIT_KUNIT_TEST
 
 config FORTIFY_KUNIT_TEST
 	tristate "Test fortified str*() and mem*() function internals at runtime" if !KUNIT_ALL_TESTS
-	depends on KUNIT
+	depends on KUNIT && FORTIFY_SOURCE
 	default KUNIT_ALL_TESTS
 	help
 	  Builds unit tests for checking internals of FORTIFY_SOURCE as used

@@ -150,12 +150,18 @@ DO_ERROR_INFO(do_trap_insn_fault,
 
 asmlinkage __visible __trap_section void do_trap_insn_illegal(struct pt_regs *regs)
 {
+	bool handled;
+
 	if (user_mode(regs)) {
 		irqentry_enter_from_user_mode(regs);
 
 		local_irq_enable();
 
-		if (!riscv_v_first_use_handler(regs))
+		handled = riscv_v_first_use_handler(regs);
+
+		local_irq_disable();
+
+		if (!handled)
 			do_trap_error(regs, SIGILL, ILL_ILLOPC, regs->epc,
 				      "Oops - illegal instruction");
 
@@ -291,16 +297,18 @@ asmlinkage __visible __trap_section void do_trap_break(struct pt_regs *regs)
 asmlinkage __visible __trap_section void do_trap_ecall_u(struct pt_regs *regs)
 {
 	if (user_mode(regs)) {
-		ulong syscall = regs->a7;
+		long syscall = regs->a7;
 
 		regs->epc += 4;
 		regs->orig_a0 = regs->a0;
 
+		riscv_v_vstate_discard(regs);
+
 		syscall = syscall_enter_from_user_mode(regs, syscall);
 
-		if (syscall < NR_syscalls)
+		if (syscall >= 0 && syscall < NR_syscalls)
 			syscall_handler(regs, syscall);
-		else
+		else if (syscall != -1)
 			regs->a0 = -ENOSYS;
 
 		syscall_exit_to_user_mode(regs);
@@ -364,6 +372,9 @@ asmlinkage void noinstr do_irq(struct pt_regs *regs)
 		: [sp] "r" (sp), [regs] "r" (regs)
 		: "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7",
 		  "t0", "t1", "t2", "t3", "t4", "t5", "t6",
+#ifndef CONFIG_FRAME_POINTER
+		  "s0",
+#endif
 		  "memory");
 	} else
 #endif
