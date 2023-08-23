@@ -173,7 +173,7 @@ do {									\
  * Architectures that can implement ACQUIRE better need to take care.
  */
 #ifndef smp_mb__after_spinlock
-#define smp_mb__after_spinlock()	kcsan_mb()
+#define smp_mb__after_spinlock()	do { kssb_mb(); kcsan_mb(); } while (0)
 #endif
 
 #ifdef CONFIG_DEBUG_SPINLOCK
