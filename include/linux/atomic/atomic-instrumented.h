@@ -21,8 +21,8 @@
 // store buffer. For those files, define NO_INSTRUMENT_ATOMIC.
 #if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
 // XXX: We don't want to emulate TSO, so use PSO here
-extern void __ssb_pso_flush(char *);
-#define kssb_flush() __ssb_pso_flush(NULL)
+extern void __ssb_pso_flush(void);
+#define kssb_flush() __ssb_pso_flush()
 #else
 #define kssb_flush() do {} while(0)
 #endif
@@ -5213,4 +5213,4 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 
 
 #endif /* _LINUX_ATOMIC_INSTRUMENTED_H */
-// 24af21a716ef0a96052d2930c389e5abdd90b60b
+// 5b8c359fa46a98d01b94a844df1e5e88cc2e1703

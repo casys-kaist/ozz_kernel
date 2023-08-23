@@ -299,8 +299,8 @@ cat << EOF
 #include <linux/compiler.h>
 
 #if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
-extern void __ssb_pso_flush(char *);
-#define kssb_flush() __ssb_pso_flush(NULL)
+extern void __ssb_pso_flush(void);
+#define kssb_flush() __ssb_pso_flush()
 #else
 #define kssb_flush() do {} while(0)
 #endif

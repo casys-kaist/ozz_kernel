@@ -9,8 +9,8 @@
 #include <linux/compiler.h>
 
 #if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
-extern void __ssb_pso_flush(char *);
-#define kssb_flush() __ssb_pso_flush(NULL)
+extern void __ssb_pso_flush(void);
+#define kssb_flush() __ssb_pso_flush()
 #else
 #define kssb_flush() do {} while(0)
 #endif
@@ -4730,4 +4730,4 @@ raw_atomic64_dec_if_positive(atomic64_t *v)
 }
 
 #endif /* _LINUX_ATOMIC_FALLBACK_H */
-// 9980da1f415723fc1de80e691cad4a37d64d44df
+// a06a11e8184e34496e379d624beb992033d60875

@@ -167,8 +167,8 @@ cat << EOF
 // store buffer. For those files, define NO_INSTRUMENT_ATOMIC.
 #if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
 // XXX: We don't want to emulate TSO, so use PSO here
-extern void __ssb_pso_flush(char *);
-#define kssb_flush() __ssb_pso_flush(NULL)
+extern void __ssb_pso_flush(void);
+#define kssb_flush() __ssb_pso_flush()
 #else
 #define kssb_flush() do {} while(0)
 #endif
