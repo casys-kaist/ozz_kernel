@@ -170,7 +170,7 @@ do {									\
 #endif
 
 #ifndef smp_store_release
-#define smp_store_release(p, v) do { kcsan_release(); __smp_store_release(p, v); } while (0)
+#define smp_store_release(p, v) do { kssb_release(); kcsan_release(); __smp_store_release(p, v); } while (0)
 #endif
 
 #ifndef smp_load_acquire
@@ -219,7 +219,7 @@ do {									\
 #define virt_store_mb(var, value) do { kssb_mb(); kcsan_mb(); __smp_store_mb(var, value); } while (0)
 #define virt_mb__before_atomic() do { kssb_mb(); kcsan_mb(); __smp_mb__before_atomic(); } while (0)
 #define virt_mb__after_atomic()	do { kssb_mb(); kcsan_mb(); __smp_mb__after_atomic(); } while (0)
-#define virt_store_release(p, v) do { kcsan_release(); __smp_store_release(p, v); } while (0)
+#define virt_store_release(p, v) do { kssb_release(); kcsan_release(); __smp_store_release(p, v); } while (0)
 #define virt_load_acquire(p) __smp_load_acquire(p)
 
 /**

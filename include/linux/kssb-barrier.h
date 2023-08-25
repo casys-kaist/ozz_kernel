@@ -11,5 +11,6 @@ extern void __ssb_pso_flush(void);
 	do {       \
 	} while (0)
 #define kssb_wmb() ____flush()
+#define kssb_release() ____flush()
 
 #endif
