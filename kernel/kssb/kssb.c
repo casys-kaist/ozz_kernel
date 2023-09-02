@@ -9,6 +9,7 @@
 #include <linux/percpu.h>
 #include <linux/llist.h>
 #include <linux/hash.h>
+#include <linux/ptrace.h>
 
 /* #define __DEBUG */
 

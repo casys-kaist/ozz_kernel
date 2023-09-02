@@ -9,6 +9,7 @@
 #include <linux/kssb.h>
 #include <linux/kmemcov.h>
 #include <linux/kasan.h>
+#include <asm/unwind.h>
 
 /* #define __DEBUG */
 
@@ -477,6 +478,33 @@ static void __funcentry_callback_pso(void *ret)
 		set_instrumented_address(ret);
 	}
 	raw_local_irq_restore(flags);
+}
+
+static bool is_kssb_callback(unsigned long ip)
+{
+	void *callbacks[] = { __store_callback_pso, __load_callback_pso };
+	for (int i = 0; i < sizeof(callbacks) / sizeof(callbacks[0]); i++) {
+		unsigned long callback_address = (unsigned long)callbacks[i];
+		// XXX: Simple heuristic to determine that ip resides in our
+		// callbacks.
+		if (callback_address <= ip && ip < callback_address + PAGE_SIZE)
+			return true;
+	}
+	return false;
+}
+
+static unsigned long callback_caller(struct pt_regs *regs)
+{
+	struct unwind_state state;
+	unwind_start(&state, current, regs, (void *)regs->sp);
+	return state.ip;
+}
+
+unsigned long skip_kssb_callbacks(struct pt_regs *regs)
+{
+	if (is_kssb_callback(regs->ip))
+		return callback_caller(regs);
+	return regs->ip;
 }
 
 #define MEMORYMODEL pso

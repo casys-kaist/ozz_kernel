@@ -18,6 +18,7 @@
 #include <linux/nmi.h>
 #include <linux/sysfs.h>
 #include <linux/kasan.h>
+#include <linux/kssb.h>
 
 #include <asm/cpu_entry_area.h>
 #include <asm/stacktrace.h>
@@ -136,10 +137,14 @@ void show_opcodes(struct pt_regs *regs, const char *loglvl)
 
 void show_ip(struct pt_regs *regs, const char *loglvl)
 {
+	unsigned long ip = regs->ip;
+#ifdef CONFIG_KSSB
+	ip = skip_kssb_callbacks(regs);
+#endif
 #ifdef CONFIG_X86_32
-	printk("%sEIP: %pS\n", loglvl, (void *)regs->ip);
+	printk("%sEIP: %pS\n", loglvl, (void *)ip);
 #else
-	printk("%sRIP: %04x:%pS\n", loglvl, (int)regs->cs, (void *)regs->ip);
+	printk("%sRIP: %04x:%pS\n", loglvl, (int)regs->cs, (void *)ip);
 #endif
 	show_opcodes(regs, loglvl);
 }
