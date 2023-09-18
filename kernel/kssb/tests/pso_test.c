@@ -31,6 +31,7 @@ do_writer(bool do_sleep, bool disable_irq, bool funccall)
 	ptr->ptr = iptr;
 	if (funccall)
 		pso_do_nothing();
+	smp_wmb();
 	ptr->ready = true;
 	if (!do_sleep)
 		// NOTE: As of milestone-0.4, the return check
@@ -52,14 +53,16 @@ __attribute__((softstorebuffer)) static void do_reader(bool do_sleep,
 {
 	int a;
 	struct shared_t *ptr;
-	printk(KERN_INFO "%s: do_sleep: %d disable_irq: %d\n", __func__,
-	       do_sleep, disable_irq);
-	if (do_sleep)
-		mdelay(1000);
+	// printk(KERN_INFO "%s: do_sleep: %d disable_irq: %d\n", __func__,
+	//        do_sleep, disable_irq);
+	// if (do_sleep)
+	// 	mdelay(1000);
 	ptr = (struct shared_t *)&shared;
 	if (disable_irq)
 		local_irq_disable();
 	if (ptr->ready) {
+		// Uncomment to prevent reordering
+		// kssb_rmb_real();
 		a = *ptr->ptr;
 		printk("%d\n", a);
 	}

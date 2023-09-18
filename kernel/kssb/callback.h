@@ -14,6 +14,10 @@
 #error "Flush callback is not defined"
 #endif
 
+#ifndef LFENCE_CALLBACK_IMPL
+#error "Lfence callback is not defined"
+#endif
+
 #ifdef __CALLBACK_DECL_H
 // Since this header file defines callback functions, we should not
 // include this multiple times
@@ -74,6 +78,16 @@
 	}                                     \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_flush);
 
+#define __DEFINE_LFENCE_CALLBACK(_MEMORYMODEL) \
+	void __ssb_##_MEMORYMODEL##_lfence(bool full)
+
+#define _DECLARE_LFENCE_CALLBACK(_MEMORYMODEL) \
+	__DEFINE_LFENCE_CALLBACK(_MEMORYMODEL) \
+	{                                     \
+		LFENCE_CALLBACK_IMPL(full);	  \
+	}                                     \
+	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_lfence);
+
 #define __DEFINE_RETCHK_CALLBACK(_MEMORYMODEL) \
 	void __ssb_##_MEMORYMODEL##_retchk(void *ret)
 
@@ -97,6 +111,9 @@
 #define DECLARE_FLUSH_CALLBACK(_MEMORYMODEL) \
 	_DECLARE_FLUSH_CALLBACK(_MEMORYMODEL)
 
+#define DECLARE_LFENCE_CALLBACK(_MEMORYMODEL) \
+	_DECLARE_LFENCE_CALLBACK(_MEMORYMODEL)
+
 #define DECLARE_RETCHK_CALLBACK(_MEMORYMODEL) \
 	_DECLARE_RETCHK_CALLBACK(_MEMORYMODEL)
 
@@ -116,5 +133,6 @@ DECLARE_STORE_LOAD_CALLBACK(2);
 DECLARE_STORE_LOAD_CALLBACK(4);
 DECLARE_STORE_LOAD_CALLBACK(8);
 DECLARE_FLUSH_CALLBACK(MEMORYMODEL);
+DECLARE_LFENCE_CALLBACK(MEMORYMODEL);
 DECLARE_RETCHK_CALLBACK(MEMORYMODEL);
 DECLARE_FUNCENTRY_CALLBACK(MEMORYMODEL);

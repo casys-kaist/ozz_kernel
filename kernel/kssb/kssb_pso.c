@@ -10,6 +10,7 @@
 #include <linux/kmemcov.h>
 #include <linux/kasan.h>
 #include <asm/unwind.h>
+#include <linux/spinlock.h>
 
 /* #define __DEBUG */
 
@@ -21,11 +22,29 @@ struct storebuffer {
 	bool emulating;
 };
 
+#define STOREHISTORY_BITS 10
+struct storehistorybuffer {
+	struct hlist_head table[1 << STOREHISTORY_BITS];
+	bool emulating;
+};
+
 static DEFINE_PER_CPU(struct storebuffer, buffer) = {
 	.table = { [0 ...((1 << (STOREBUFFER_BITS)) - 1)] = HLIST_HEAD_INIT },
 };
 
+static struct storehistorybuffer global_history = {
+	.table = { [0 ...((1 << (STOREHISTORY_BITS)) - 1)] = HLIST_HEAD_INIT },
+};
+DEFINE_SPINLOCK(shb_lock);
+
+static uint64_t commit_count; 
+static DEFINE_PER_CPU(uint64_t, latest_load) = 0;
+static DEFINE_PER_CPU(uint64_t, latest_access) = 0;
+static DEFINE_PER_CPU(uint64_t, load_since) = 0;
+
+
 static void do_buffer_flush(uint64_t);
+static void do_buffer_flush_load(uint64_t);
 static bool is_spanning_access(struct kssb_access *acc);
 static void flush_spanning_access(struct kssb_access *acc);
 
@@ -65,6 +84,7 @@ static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 	// The store buffer is exhausted. Let's flush the store buffer
 	// and give a second shot.
 	do_buffer_flush(0);
+	do_buffer_flush_load(0);
 	entry = new_entry();
 	if (entry)
 		goto success;
@@ -86,6 +106,24 @@ static struct kssb_buffer_entry *latest_entry(struct kssb_access *acc)
 		// bucket so we need to check the address
 		if (entry->access.aligned_addr == acc->aligned_addr)
 			return entry;
+	}
+	return NULL;
+}
+
+static struct kssb_buffer_entry *get_history(struct kssb_access *acc)
+{
+	struct kssb_buffer_entry *entry;
+	struct storehistorybuffer *history = (struct storehistorybuffer *)&global_history;
+	BUG_ON(!acc->aligned);
+	// This function should be called while lock is holded 
+	hash_for_each_possible(history->table, entry, hlist,
+			       (uint64_t)acc->aligned_addr) {
+		// Two different addrs are possibly mashed into a same
+		// bucket so we need to check the address
+		if ((entry->access.aligned_addr == acc->aligned_addr) 
+				&& (entry->access.timestamp > *this_cpu_ptr(&load_since))) {
+			return entry;
+		}
 	}
 	return NULL;
 }
@@ -124,8 +162,51 @@ static void __flush_single_entry_po_preserve(struct kssb_access *acc)
 	__store_single_memcov_trace(acc);
 }
 
+static void flush_single_entry_load(struct kssb_buffer_entry *entry)
+{
+	hash_del(&(entry->hlist));
+	reclaim_entry(entry);
+}
+
+static void do_buffer_flush_load(uint64_t aligned_addr) {
+	int bkt;
+	struct kssb_buffer_entry *entry;
+	struct hlist_node *tmp;
+	struct storehistorybuffer *history = (struct storehistorybuffer *)&global_history;
+	unsigned long flags;
+	bool flushed = false;
+	bool flush_all = !aligned_addr;
+
+	spin_lock_irqsave(&shb_lock, flags);
+	hash_for_each_safe(history->table, bkt, tmp, entry, hlist) {
+		// We just need to keep the stores' order only for
+		// those having the same destination
+		if (flush_all || entry->access.aligned_addr == aligned_addr) {
+			flushed = true;
+			flush_single_entry_load(entry);
+		}
+	}
+	spin_unlock_irqrestore(&shb_lock, flags);
+}
+
+static void do_buffer_flush_load_unchecked(uint64_t aligned_addr) {
+	struct kssb_buffer_entry *entry;
+	struct hlist_node *tmp;
+	struct storehistorybuffer *history = (struct storehistorybuffer *)&global_history;
+
+	hash_for_each_possible_safe(history->table, entry, tmp, hlist, aligned_addr) {
+		// Two different addrs are possibly mashed into a same
+		// bucket so we need to check the address
+		if (entry->access.aligned_addr == aligned_addr) {
+			flush_single_entry_load(entry);
+		}
+	}
+}
+
 static void flush_single_entry(struct kssb_buffer_entry *entry)
 {
+	struct storehistorybuffer *history = (struct storehistorybuffer *)&global_history;
+	unsigned long flags;
 	// We try our best to populate the page table entry before
 	// storing the entry in the store callback. So here we expect
 	// page table entries present for all entries. Although this
@@ -134,9 +215,26 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	// expectation is not met.
 	/* BUG_ON(in_page_fault_handler() && */
 	/*        kssb_page_net_present(&entry->access)); */
-	__store_single_memcov_trace(&entry->access);
-	hash_del(&entry->hlist);
-	reclaim_entry(entry);
+
+	hash_del(&(entry->hlist));
+
+	spin_lock_irqsave(&shb_lock, flags);
+
+	// These operations should be atomic, or commit order will be corrupted
+	*this_cpu_ptr(&latest_access) = ++commit_count;
+	entry->access.timestamp = commit_count;
+	entry->access.aligned_old_val =
+		READ_ONCE(*(uint64_t *)entry->access.aligned_addr);
+
+	__store_single_memcov_trace(&(entry->access));
+
+	// Remove duplicated entry (todo: should fix)
+	do_buffer_flush_load_unchecked(entry->access.aligned_addr);
+
+	hash_add(history->table, &(entry->hlist),
+		 (uint64_t)entry->access.aligned_addr);
+
+	spin_unlock_irqrestore(&shb_lock, flags);
 }
 
 static void do_buffer_flush(uint64_t aligned_addr)
@@ -219,13 +317,37 @@ static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
 	return ret;
 }
 
+static inline void update_latest_access(uint64_t new)
+{
+	uint64_t old_load = *(this_cpu_ptr(&latest_load));
+	uint64_t old_access = *(this_cpu_ptr(&latest_access));
+
+	*(this_cpu_ptr(&latest_load)) = (new > old_load)? new : old_load;
+	*(this_cpu_ptr(&latest_access)) = (new > old_access)? new : old_access;
+}
+
 static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 {
-	struct kssb_buffer_entry *latest;
+	struct kssb_buffer_entry *latest, *old;
 	uint64_t ret;
+	unsigned long flags;
+	bool load_old_value = !flush_vector_next(acc->inst);
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
 		     acc->aligned_addr, acc->offset, acc->size);
+
+	spin_lock_irqsave(&shb_lock, flags);
+
+	if (load_old_value && (old = get_history(acc))) {
+		ret = ((old->access.aligned_old_val) >> _BITS(acc->offset)) 
+				& _BIT_MASK(_BITS(acc->size));
+		update_latest_access(old->access.timestamp);
+		flush_single_entry_load(old);
+		spin_unlock_irqrestore(&shb_lock, flags);
+		goto ret_val;
+	}
+	update_latest_access(commit_count);
+	spin_unlock_irqrestore(&shb_lock, flags);
 
 	// We don't have to masking upper bits of ret. It will be done
 	// when the value is returned.
@@ -234,6 +356,7 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 	else
 		ret = __load_single(acc);
 
+ret_val:
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
 
 	do_buffer_flush_after_insn(acc);
@@ -447,6 +570,17 @@ static void __flush_callback_pso(void)
 	raw_local_irq_restore(flags);
 }
 
+static void __lfence_callback_pso(bool full)
+{
+	unsigned long flags;
+	raw_local_irq_save(flags);
+	if (in_kssb_enabled_task()) {
+		*this_cpu_ptr(&load_since) = 
+			(full)? *this_cpu_ptr(&latest_access) : *this_cpu_ptr(&latest_load);
+	}
+	raw_local_irq_restore(flags);
+}
+
 static void __retchk_callback_pso(void *ret)
 {
 	unsigned long flags;
@@ -511,6 +645,7 @@ unsigned long skip_kssb_callbacks(struct pt_regs *regs)
 #define STORE_CALLBACK_IMPL __store_callback_pso
 #define LOAD_CALLBACK_IMPL __load_callback_pso
 #define FLUSH_CALLBACK_IMPL __flush_callback_pso
+#define LFENCE_CALLBACK_IMPL __lfence_callback_pso
 #define RETCHK_CALLBACK_IMPL __retchk_callback_pso
 #define FUNCENTRY_CALLBACK_IMPL __funcentry_callback_pso
 #include "callback.h"
