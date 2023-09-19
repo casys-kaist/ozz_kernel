@@ -826,6 +826,9 @@ __SYSCALL(__NR_ssb_pso_reader, sys_ssb_pso_reader)
 #define __NR_cachestat 451
 __SYSCALL(__NR_cachestat, sys_cachestat)
 
+#define __NR_fchmodat2 452
+__SYSCALL(__NR_fchmodat2, sys_fchmodat2)
+
 #undef __NR_syscalls
 #define __NR_syscalls 505
 

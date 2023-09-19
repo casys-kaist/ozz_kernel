@@ -909,12 +909,15 @@ __SYSCALL(__NR_futex_waitv, sys_futex_waitv)
 __SYSCALL(__NR_set_mempolicy_home_node, sys_set_mempolicy_home_node)
 #define __NR_cachestat 451
 __SYSCALL(__NR_cachestat, sys_cachestat)
+#define __NR_fchmodat2 452
+__SYSCALL(__NR_fchmodat2, sys_fchmodat2)
 #define __NR_ssb_feedinput 500
 __SYSCALL(__NR_ssb_feedinput, sys_ssb_feedinput)
 #define __NR_ssb_pso_writer 501
 __SYSCALL(__NR_ssb_pso_writer, sys_ssb_pso_writer)
 #define __NR_ssb_pso_reader 502
 __SYSCALL(__NR_ssb_pso_reader, sys_ssb_pso_reader)
+
 /*
  * Please add new compat syscalls above this comment and update
  * __NR_compat_syscalls in asm/unistd.h.

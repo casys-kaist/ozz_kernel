@@ -465,7 +465,7 @@
 449	common	futex_waitv			sys_futex_waitv
 450	common	set_mempolicy_home_node		sys_set_mempolicy_home_node
 451	common	cachestat			sys_cachestat
+452	common	fchmodat2			sys_fchmodat2
 500 common ssb_feedinput sys_ssb_feedinput
 501 common ssb_pso_writer sys_ssb_pso_writer
 502 common ssb_pso_reader sys_ssb_pso_reader
-
