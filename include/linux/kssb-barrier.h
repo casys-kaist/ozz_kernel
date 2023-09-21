@@ -15,12 +15,7 @@ extern void __ssb_pso_lfence(bool full);
 		____flush();      \
 		____lfence(true); \
 	} while (0)
-// Adding callbacks in kssb_rmb raises build error in vdso.
-// So, we temporariliy leave it empty.
-#define kssb_rmb()                \
-	do {                      \
-		____lfence(true); \
-	} while (0)
+#define kssb_rmb() ____lfence(false)
 #define kssb_wmb() ____flush()
 #define kssb_release() ____flush()
 
