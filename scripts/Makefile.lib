@@ -191,9 +191,9 @@ endif
 # N: not instrument at all
 ifeq ($(CONFIG_KSSB),y)
   _c_flags += $(if $(patsubst y%,, \
-    $(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),,$(CFLAGS_KSSB))
+    $(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),,$(CFLAGS_KSSB) -D__KSSB_INSTRUMENT_BARRIERS__)
   _c_flags += $(if $(patsubst n%,, \
-    $(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),,$(CFLAGS_KSSB_FLUSHONLY))
+    $(KSSB_INSTRUMENT_$(basetarget).o)$(KSSB_INSTRUMENT)n),,$(CFLAGS_KSSB_FLUSHONLY) -D__KSSB_INSTRUMENT_BARRIERS__)
 endif
 
 #

@@ -136,7 +136,6 @@ static __always_inline int do_hres(const struct vdso_data *vd, clockid_t clk,
 				return do_hres_timens(vd, clk, ts);
 			cpu_relax();
 		}
-		// It raises undefined symbol error with kssb_rmb() definition
 		smp_rmb();
 
 		if (unlikely(!vdso_clocksource_ok(vd)))
