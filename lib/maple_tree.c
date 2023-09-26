@@ -2028,6 +2028,8 @@ static inline void mab_mas_cp(struct maple_big_node *b_node,
 		pivots[j++] = b_node->pivot[i++];
 	} while (i <= mab_end && likely(b_node->pivot[i]));
 
+	smp_mb();
+
 	memcpy(slots, b_node->slot + mab_start,
 	       sizeof(void *) * (i - mab_start));
 
