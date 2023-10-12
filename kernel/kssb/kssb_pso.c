@@ -121,7 +121,7 @@ static struct kssb_buffer_entry *get_history(struct kssb_access *acc)
 		// Two different addrs are possibly mashed into a same
 		// bucket so we need to check the address
 		if ((entry->access.aligned_addr == acc->aligned_addr) &&
-		    (entry->access.timestamp > *this_cpu_ptr(&load_since))) {
+		    (entry->access.timestamp > __this_cpu_read(load_since))) {
 			return entry;
 		}
 	}
@@ -217,7 +217,7 @@ static void record_history(struct kssb_buffer_entry *entry)
 	spin_lock_irqsave(&shb_lock, flags);
 
 	// These operations should be atomic, or commit order will be corrupted
-	*this_cpu_ptr(&latest_access) = ++commit_count;
+	__this_cpu_write(latest_access, ++commit_count);
 	entry->access.timestamp = commit_count;
 	entry->access.aligned_old_val =
 		READ_ONCE(*(uint64_t *)entry->access.aligned_addr);
@@ -332,11 +332,11 @@ static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
 
 static inline void update_latest_access(uint64_t new)
 {
-	uint64_t old_load = *(this_cpu_ptr(&latest_load));
-	uint64_t old_access = *(this_cpu_ptr(&latest_access));
+	uint64_t old_load = __this_cpu_read(latest_load);
+	uint64_t old_access = __this_cpu_read(latest_access);
 
-	*(this_cpu_ptr(&latest_load)) = (new > old_load) ? new : old_load;
-	*(this_cpu_ptr(&latest_access)) = (new > old_access) ? new : old_access;
+	__this_cpu_write(latest_load, (new > old_load) ? new : old_load);
+	__this_cpu_write(latest_access, (new > old_access) ? new : old_access);
 }
 
 static uint64_t do_buffer_load_from_history(struct kssb_access *acc)
@@ -601,12 +601,13 @@ static void __flush_callback_pso(void)
 
 static void __lfence_callback_pso(bool full)
 {
+	uint64_t since;
 	unsigned long flags;
 	raw_local_irq_save(flags);
 	if (in_kssb_enabled_task()) {
-		*this_cpu_ptr(&load_since) =
-			(full) ? *this_cpu_ptr(&latest_access) :
-				       *this_cpu_ptr(&latest_load);
+		since = (full) ? __this_cpu_read(latest_access) :
+				       __this_cpu_read(latest_load);
+		__this_cpu_write(load_since, since);
 	}
 	raw_local_irq_restore(flags);
 }
