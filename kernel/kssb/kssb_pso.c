@@ -339,37 +339,53 @@ static inline void update_latest_access(uint64_t new)
 	*(this_cpu_ptr(&latest_access)) = (new > old_access) ? new : old_access;
 }
 
-static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
+static uint64_t do_buffer_load_from_history(struct kssb_access *acc)
 {
-	struct kssb_buffer_entry *latest, *old;
 	uint64_t ret;
-	unsigned long flags;
-	bool load_old_value = !flush_vector_next(acc->inst);
+	struct kssb_buffer_entry *old = get_history(acc);
 
-	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
-		     acc->aligned_addr, acc->offset, acc->size);
+	if (!old)
+		return 0;
 
-	spin_lock_irqsave(&shb_lock, flags);
+	ret = ((old->access.aligned_old_val) >> _BITS(acc->offset)) &
+	      _BIT_MASK(_BITS(acc->size));
+	update_latest_access(old->access.timestamp);
+	flush_single_entry_load(old);
 
-	if (load_old_value && (old = get_history(acc))) {
-		ret = ((old->access.aligned_old_val) >> _BITS(acc->offset)) &
-		      _BIT_MASK(_BITS(acc->size));
-		update_latest_access(old->access.timestamp);
-		flush_single_entry_load(old);
-		spin_unlock_irqrestore(&shb_lock, flags);
-		goto ret_val;
-	}
+	return ret;
+}
+
+static uint64_t do_buffer_load_latest(struct kssb_access *acc)
+{
+	uint64_t ret;
+	struct kssb_buffer_entry *latest;
 	update_latest_access(commit_count);
-	spin_unlock_irqrestore(&shb_lock, flags);
-
 	// We don't have to masking upper bits of ret. It will be done
 	// when the value is returned.
 	if ((latest = latest_entry(acc)))
 		ret = __assemble_value(latest, acc);
 	else
 		ret = __load_single(acc);
+	return ret;
+}
 
-ret_val:
+static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
+{
+	unsigned long flags;
+	uint64_t ret = 0;
+	bool load_old_value = !flush_vector_next(acc->inst);
+
+	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
+		     acc->aligned_addr, acc->offset, acc->size);
+
+	spin_lock_irqsave(&shb_lock, flags);
+	if (load_old_value)
+		ret = do_buffer_load_from_history(acc);
+
+	if (!ret)
+		ret = do_buffer_load_latest(acc);
+	spin_unlock_irqrestore(&shb_lock, flags);
+
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
 
 	do_buffer_flush_after_insn(acc);
