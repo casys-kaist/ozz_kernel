@@ -208,21 +208,11 @@ static void do_buffer_flush_load_unchecked(uint64_t aligned_addr)
 	}
 }
 
-static void flush_single_entry(struct kssb_buffer_entry *entry)
+static void record_history(struct kssb_buffer_entry *entry)
 {
+	unsigned long flags;
 	struct storehistorybuffer *history =
 		(struct storehistorybuffer *)&global_history;
-	unsigned long flags;
-	// We try our best to populate the page table entry before
-	// storing the entry in the store callback. So here we expect
-	// page table entries present for all entries. Although this
-	// is not always true, we just BUG_ON() to panic the kernel so
-	// the fuzzer can filter out the false alarm when our
-	// expectation is not met.
-	/* BUG_ON(in_page_fault_handler() && */
-	/*        kssb_page_net_present(&entry->access)); */
-
-	hash_del(&(entry->hlist));
 
 	spin_lock_irqsave(&shb_lock, flags);
 
@@ -241,6 +231,23 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 		 (uint64_t)entry->access.aligned_addr);
 
 	spin_unlock_irqrestore(&shb_lock, flags);
+}
+
+static void flush_single_entry(struct kssb_buffer_entry *entry)
+{
+	// We try our best to populate the page table entry before
+	// storing the entry in the store callback. So here we expect
+	// page table entries present for all entries. Although this
+	// is not always true, we just BUG_ON() to panic the kernel so
+	// the fuzzer can filter out the false alarm when our
+	// expectation is not met.
+	/* BUG_ON(in_page_fault_handler() && */
+	/*        kssb_page_net_present(&entry->access)); */
+
+	// Remove entry from the store buffer first, and then move the
+	// entry to the history buffer.
+	hash_del(&(entry->hlist));
+	record_history(entry);
 }
 
 static void do_buffer_flush(uint64_t aligned_addr)
