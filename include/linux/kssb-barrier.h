@@ -18,6 +18,7 @@ extern void __ssb_pso_lfence(bool full);
 #define kssb_rmb() ____lfence(false)
 #define kssb_wmb() ____flush()
 #define kssb_release() ____flush()
+#define kssb_acquire() ____lfence(false)
 
 #else
 
@@ -31,6 +32,9 @@ extern void __ssb_pso_lfence(bool full);
 	do {       \
 	} while (0)
 #define kssb_release() \
+	do {           \
+	} while (0)
+#define kssb_acquire() \
 	do {           \
 	} while (0)
 #endif
