@@ -17,22 +17,21 @@
 #include "kssb.h"
 
 #define STOREBUFFER_BITS 10
-struct storebuffer {
+struct store_buffer {
 	DECLARE_HASHTABLE(table, STOREBUFFER_BITS);
 	bool emulating;
 };
 
 #define STOREHISTORY_BITS 10
-struct storehistorybuffer {
+struct store_history {
 	struct hlist_head table[1 << STOREHISTORY_BITS];
-	bool emulating;
 };
 
-static DEFINE_PER_CPU(struct storebuffer, buffer) = {
+static DEFINE_PER_CPU(struct store_buffer, buffer) = {
 	.table = { [0 ...((1 << (STOREBUFFER_BITS)) - 1)] = HLIST_HEAD_INIT },
 };
 
-static struct storehistorybuffer global_history = {
+static struct store_history global_history = {
 	.table = { [0 ...((1 << (STOREHISTORY_BITS)) - 1)] = HLIST_HEAD_INIT },
 };
 DEFINE_SPINLOCK(shb_lock);
@@ -51,7 +50,7 @@ static void flush_spanning_access(struct kssb_access *acc);
 void kssb_print_store_buffer(void)
 {
 	struct kssb_buffer_entry *entry;
-	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	struct store_buffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	int bkt, cnt = 0;
 
 	pr_alert("Store buffer entries:\n");
@@ -68,7 +67,7 @@ EXPORT_SYMBOL(kssb_print_store_buffer);
 
 static void set_emulating(bool emulating)
 {
-	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	struct store_buffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	pcpu_buffer->emulating = emulating;
 }
 
@@ -97,7 +96,7 @@ success:
 static struct kssb_buffer_entry *latest_entry(struct kssb_access *acc)
 {
 	struct kssb_buffer_entry *entry;
-	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	struct store_buffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	BUG_ON(!acc->aligned);
 	hash_for_each_possible(pcpu_buffer->table, entry, hlist,
 			       (uint64_t)acc->aligned_addr) {
@@ -112,8 +111,7 @@ static struct kssb_buffer_entry *latest_entry(struct kssb_access *acc)
 static struct kssb_buffer_entry *get_history(struct kssb_access *acc)
 {
 	struct kssb_buffer_entry *entry;
-	struct storehistorybuffer *history =
-		(struct storehistorybuffer *)&global_history;
+	struct store_history *history = (struct store_history *)&global_history;
 	BUG_ON(!acc->aligned);
 	// This function should be called while lock is holded
 	hash_for_each_possible(history->table, entry, hlist,
@@ -144,7 +142,7 @@ static inline bool in_stack_page(struct kssb_access *acc)
 static void store_entry(struct kssb_buffer_entry *entry,
 			struct kssb_access *acc)
 {
-	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	struct store_buffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	BUG_ON(!acc->aligned);
 	hash_add(pcpu_buffer->table, &(entry->hlist),
 		 (uint64_t)acc->aligned_addr);
@@ -173,8 +171,7 @@ static void do_buffer_flush_load(uint64_t aligned_addr)
 	int bkt;
 	struct kssb_buffer_entry *entry;
 	struct hlist_node *tmp;
-	struct storehistorybuffer *history =
-		(struct storehistorybuffer *)&global_history;
+	struct store_history *history = (struct store_history *)&global_history;
 	unsigned long flags;
 	bool flushed = false;
 	bool flush_all = !aligned_addr;
@@ -195,8 +192,7 @@ static void do_buffer_flush_load_unchecked(uint64_t aligned_addr)
 {
 	struct kssb_buffer_entry *entry;
 	struct hlist_node *tmp;
-	struct storehistorybuffer *history =
-		(struct storehistorybuffer *)&global_history;
+	struct store_history *history = (struct store_history *)&global_history;
 
 	hash_for_each_possible_safe(history->table, entry, tmp, hlist,
 				    aligned_addr) {
@@ -211,8 +207,7 @@ static void do_buffer_flush_load_unchecked(uint64_t aligned_addr)
 static void record_history(struct kssb_buffer_entry *entry)
 {
 	unsigned long flags;
-	struct storehistorybuffer *history =
-		(struct storehistorybuffer *)&global_history;
+	struct store_history *history = (struct store_history *)&global_history;
 
 	spin_lock_irqsave(&shb_lock, flags);
 
@@ -255,7 +250,7 @@ static void do_buffer_flush(uint64_t aligned_addr)
 	int bkt;
 	struct kssb_buffer_entry *entry;
 	struct hlist_node *tmp;
-	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	struct store_buffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	bool flushed = false;
 	bool flush_all = !aligned_addr;
 
@@ -281,7 +276,7 @@ static void do_buffer_flush_n(uint64_t aligned_addr, int freeing)
 {
 	struct hlist_node *tmp;
 	struct kssb_buffer_entry *entry;
-	struct storebuffer *pcpu_buffer = this_cpu_ptr(&buffer);
+	struct store_buffer *pcpu_buffer = this_cpu_ptr(&buffer);
 	int bkt, freed = 0;
 
 	if (!freeing)
@@ -630,7 +625,7 @@ static void __retchk_callback_pso(void *ret)
 static void __funcentry_callback_pso(void *ret)
 {
 	unsigned long flags;
-	struct storebuffer *pcpu_buffer;
+	struct store_buffer *pcpu_buffer;
 
 	if (!in_kssb_enabled_task())
 		return;
