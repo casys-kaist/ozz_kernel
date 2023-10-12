@@ -37,7 +37,6 @@ static struct store_history global_history = {
 DEFINE_SPINLOCK(shb_lock);
 
 static uint64_t commit_count;
-static DEFINE_PER_CPU(uint64_t, latest_load) = 0;
 static DEFINE_PER_CPU(uint64_t, latest_access) = 0;
 static DEFINE_PER_CPU(uint64_t, load_since) = 0;
 
@@ -327,10 +326,7 @@ static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
 
 static inline void update_latest_access(uint64_t new)
 {
-	uint64_t old_load = __this_cpu_read(latest_load);
 	uint64_t old_access = __this_cpu_read(latest_access);
-
-	__this_cpu_write(latest_load, (new > old_load) ? new : old_load);
 	__this_cpu_write(latest_access, (new > old_access) ? new : old_access);
 }
 
@@ -594,14 +590,13 @@ static void __flush_callback_pso(void)
 	raw_local_irq_restore(flags);
 }
 
-static void __lfence_callback_pso(bool full)
+static void __lfence_callback_pso(void)
 {
 	uint64_t since;
 	unsigned long flags;
 	raw_local_irq_save(flags);
 	if (in_kssb_enabled_task()) {
-		since = (full) ? __this_cpu_read(latest_access) :
-				       __this_cpu_read(latest_load);
+		since = __this_cpu_read(latest_access);
 		__this_cpu_write(load_since, since);
 	}
 	raw_local_irq_restore(flags);

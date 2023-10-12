@@ -79,13 +79,13 @@
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_flush);
 
 #define __DEFINE_LFENCE_CALLBACK(_MEMORYMODEL) \
-	void __ssb_##_MEMORYMODEL##_lfence(bool full)
+	void __ssb_##_MEMORYMODEL##_lfence(void)
 
 #define _DECLARE_LFENCE_CALLBACK(_MEMORYMODEL) \
 	__DEFINE_LFENCE_CALLBACK(_MEMORYMODEL) \
-	{                                     \
-		LFENCE_CALLBACK_IMPL(full);	  \
-	}                                     \
+	{                                      \
+		LFENCE_CALLBACK_IMPL();        \
+	}                                      \
 	EXPORT_SYMBOL(__ssb_##_MEMORYMODEL##_lfence);
 
 #define __DEFINE_RETCHK_CALLBACK(_MEMORYMODEL) \
