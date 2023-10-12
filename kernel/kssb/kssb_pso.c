@@ -34,16 +34,20 @@ static DEFINE_PER_CPU(struct store_buffer, buffer) = {
 static struct store_history global_history = {
 	.table = { [0 ...((1 << (STOREHISTORY_BITS)) - 1)] = HLIST_HEAD_INIT },
 };
-DEFINE_SPINLOCK(shb_lock);
+// XXX: using lock surely slow down the kernel so I personally don't
+// like it. Anyway in this project we have only two threads that one
+// is mostly suspended, and it is very unlikely that there is a lock
+// contention on this lock.
+DEFINE_SPINLOCK(history_lock);
 
 static uint64_t commit_count;
 static DEFINE_PER_CPU(uint64_t, latest_access) = 0;
 static DEFINE_PER_CPU(uint64_t, load_since) = 0;
 
 static void do_buffer_flush(uint64_t);
-static void do_buffer_flush_load(uint64_t);
 static bool is_spanning_access(struct kssb_access *acc);
 static void flush_spanning_access(struct kssb_access *acc);
+static void clear_history(void);
 
 // XXX: Should be defined in kssb.c
 void kssb_print_store_buffer(void)
@@ -78,10 +82,10 @@ static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 	struct kssb_buffer_entry *entry = new_entry();
 	if (entry)
 		goto success;
-	// The store buffer is exhausted. Let's flush the store buffer
-	// and give a second shot.
+	// The store buffer is exhausted. Let's flush the store buffer and
+	// the history and give a second shot.
 	do_buffer_flush(0);
-	do_buffer_flush_load(0);
+	clear_history();
 	entry = new_entry();
 	if (entry)
 		goto success;
@@ -159,72 +163,48 @@ static void __flush_single_entry_po_preserve(struct kssb_access *acc)
 	__store_single_memcov_trace(acc);
 }
 
-static void flush_single_entry_load(struct kssb_buffer_entry *entry)
+static void reclaim_entry_from_history(struct kssb_buffer_entry *entry)
 {
 	hash_del(&(entry->hlist));
 	reclaim_entry(entry);
 }
 
-static void do_buffer_flush_load(uint64_t aligned_addr)
+static void clear_history(void)
 {
 	int bkt;
 	struct kssb_buffer_entry *entry;
 	struct hlist_node *tmp;
 	struct store_history *history = (struct store_history *)&global_history;
-	unsigned long flags;
-	bool flushed = false;
-	bool flush_all = !aligned_addr;
-
-	spin_lock_irqsave(&shb_lock, flags);
+	spin_lock(&history_lock);
 	hash_for_each_safe(history->table, bkt, tmp, entry, hlist) {
-		// We just need to keep the stores' order only for
-		// those having the same destination
-		if (flush_all || entry->access.aligned_addr == aligned_addr) {
-			flushed = true;
-			flush_single_entry_load(entry);
-		}
+		reclaim_entry_from_history(entry);
 	}
-	spin_unlock_irqrestore(&shb_lock, flags);
+	spin_unlock(&history_lock);
 }
 
-static void do_buffer_flush_load_unchecked(uint64_t aligned_addr)
+static void charge_past_value(struct kssb_buffer_entry *entry)
 {
-	struct kssb_buffer_entry *entry;
-	struct hlist_node *tmp;
-	struct store_history *history = (struct store_history *)&global_history;
-
-	hash_for_each_possible_safe(history->table, entry, tmp, hlist,
-				    aligned_addr) {
-		// Two different addrs are possibly mashed into a same
-		// bucket so we need to check the address
-		if (entry->access.aligned_addr == aligned_addr) {
-			flush_single_entry_load(entry);
-		}
-	}
-}
-
-static void record_history(struct kssb_buffer_entry *entry)
-{
-	unsigned long flags;
-	struct store_history *history = (struct store_history *)&global_history;
-
-	spin_lock_irqsave(&shb_lock, flags);
-
-	// These operations should be atomic, or commit order will be corrupted
 	__this_cpu_write(latest_access, ++commit_count);
 	entry->access.timestamp = commit_count;
 	entry->access.aligned_old_val =
 		READ_ONCE(*(uint64_t *)entry->access.aligned_addr);
+}
 
-	__store_single_memcov_trace(&(entry->access));
+static void record_history(struct kssb_buffer_entry *entry)
+{
+	struct hlist_node *tmp;
+	struct store_history *history = (struct store_history *)&global_history;
+	uint64_t aligned_addr = entry->access.aligned_addr;
 
-	// Remove duplicated entry (todo: should fix)
-	do_buffer_flush_load_unchecked(entry->access.aligned_addr);
-
+	// Remove duplicated entry first
+	hash_for_each_possible_safe(history->table, entry, tmp, hlist,
+				    aligned_addr) {
+		if (entry->access.aligned_addr == aligned_addr)
+			reclaim_entry_from_history(entry);
+	}
+	// Then record the history
 	hash_add(history->table, &(entry->hlist),
 		 (uint64_t)entry->access.aligned_addr);
-
-	spin_unlock_irqrestore(&shb_lock, flags);
 }
 
 static void flush_single_entry(struct kssb_buffer_entry *entry)
@@ -238,10 +218,17 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	/* BUG_ON(in_page_fault_handler() && */
 	/*        kssb_page_net_present(&entry->access)); */
 
+	// Below should be atomic, or commit order will be corrupted
+	spin_lock(&history_lock);
+	// Charge the past value in to the entry, and then update the
+	// value in memory
+	charge_past_value(entry);
+	__store_single_memcov_trace(&(entry->access));
 	// Remove entry from the store buffer first, and then move the
 	// entry to the history buffer.
 	hash_del(&(entry->hlist));
 	record_history(entry);
+	spin_unlock(&history_lock);
 }
 
 static void do_buffer_flush(uint64_t aligned_addr)
@@ -341,7 +328,7 @@ static uint64_t do_buffer_load_from_history(struct kssb_access *acc)
 	ret = ((old->access.aligned_old_val) >> _BITS(acc->offset)) &
 	      _BIT_MASK(_BITS(acc->size));
 	update_latest_access(old->access.timestamp);
-	flush_single_entry_load(old);
+	reclaim_entry_from_history(old);
 
 	return ret;
 }
@@ -362,20 +349,19 @@ static uint64_t do_buffer_load_latest(struct kssb_access *acc)
 
 static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 {
-	unsigned long flags;
 	uint64_t ret = 0;
 	bool load_old_value = !flush_vector_next(acc->inst);
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
 		     acc->aligned_addr, acc->offset, acc->size);
 
-	spin_lock_irqsave(&shb_lock, flags);
+	spin_lock(&history_lock);
 	if (load_old_value)
 		ret = do_buffer_load_from_history(acc);
 
 	if (!ret)
 		ret = do_buffer_load_latest(acc);
-	spin_unlock_irqrestore(&shb_lock, flags);
+	spin_unlock(&history_lock);
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
 
