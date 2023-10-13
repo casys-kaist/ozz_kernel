@@ -20,6 +20,7 @@ void __sanitize_memcov_trace_load(unsigned long inst, void *addr, size_t size);
 void sanitize_memcov_trace_store(const volatile void *addr, size_t size);
 void sanitize_memcov_trace_load(const volatile void *addr, size_t size);
 void sanitize_memcov_trace_flush(void);
+void sanitize_memcov_trace_lfence(void);
 
 #else
 
@@ -30,6 +31,7 @@ void sanitize_memcov_trace_flush(void);
 #define sanitize_memcov_trace_store(...) do { } while (0)
 #define sanitize_memcov_trace_load(...) do { } while (0)
 #define sanitize_memcov_trace_flush(...) do { } while (0)
+#define sanitize_memcov_trace_lfence(...) do { } while (0)
 
 #endif /* CONFIG_KMEMCOV */
 

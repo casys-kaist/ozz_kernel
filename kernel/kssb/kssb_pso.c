@@ -584,6 +584,7 @@ static void __lfence_callback_pso(void)
 	if (in_kssb_enabled_task()) {
 		since = __this_cpu_read(latest_access);
 		__this_cpu_write(load_since, since);
+		sanitize_memcov_trace_lfence();
 	}
 	raw_local_irq_restore(flags);
 }

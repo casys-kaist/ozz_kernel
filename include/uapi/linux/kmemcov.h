@@ -9,6 +9,7 @@ enum kmemcov_access_type {
 	KMEMCOV_ACCESS_STORE,
 	KMEMCOV_ACCESS_LOAD,
 	KMEMCOV_ACCESS_FLUSH,
+	KMEMCOV_ACCESS_LFENCE,
 };
 
 struct kmemcov_access {

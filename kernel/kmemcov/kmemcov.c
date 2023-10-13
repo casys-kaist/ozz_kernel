@@ -93,14 +93,14 @@ static void __always_inline notrace __sanitize_memcov_trace_access(
 							   KMEMCOV_ACCESS_LOAD));
 }
 
-static void __always_inline notrace __sanitize_memcov_trace_flush(void)
+static void __always_inline notrace __sanitize_memcov_trace_barrier(bool store)
 {
-	// TODO: We do not record information other than a flush operation
-	// is executed. Not sure we want to do it.
+	enum kmemcov_access_type typ;
 	struct task_struct *t = current;
 	if (!check_kmemcov_mode(KMEMCOV_MODE_TRACE_STLD, t))
 		return;
-	__sanitize_memcov_trace_access_safe(0, 0, 0, KMEMCOV_ACCESS_FLUSH);
+	typ = (store ? KMEMCOV_ACCESS_FLUSH : KMEMCOV_ACCESS_LFENCE);
+	__sanitize_memcov_trace_access_safe(0, 0, 0, type);
 }
 
 void __sanitize_memcov_trace_store(unsigned long inst, void *addr, size_t size)
@@ -129,9 +129,15 @@ EXPORT_SYMBOL(sanitize_memcov_trace_load);
 
 void sanitize_memcov_trace_flush(void)
 {
-	__sanitize_memcov_trace_flush();
+	__sanitize_memcov_trace_barrier(true);
 }
 EXPORT_SYMBOL(sanitize_memcov_trace_flush);
+
+void sanitize_memcov_trace_lfence(void)
+{
+	__sanitize_memcov_trace_barrier(false);
+}
+EXPORT_SYMBOL(sanitize_memcov_trace_lfence);
 
 static void kmemcov_get(struct kmemcov *kmemcov)
 {
