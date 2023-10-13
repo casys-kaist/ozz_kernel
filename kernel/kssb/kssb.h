@@ -30,6 +30,9 @@ struct kssb_access {
 	uint64_t aligned_val;
 	uint64_t mask;
 	loff_t offset;
+	// Store commit information
+	uint64_t aligned_old_val;
+	uint64_t timestamp;
 };
 
 struct kssb_buffer_entry {
