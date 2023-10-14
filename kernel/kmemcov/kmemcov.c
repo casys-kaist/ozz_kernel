@@ -100,7 +100,7 @@ static void __always_inline notrace __sanitize_memcov_trace_barrier(bool store)
 	if (!check_kmemcov_mode(KMEMCOV_MODE_TRACE_STLD, t))
 		return;
 	typ = (store ? KMEMCOV_ACCESS_FLUSH : KMEMCOV_ACCESS_LFENCE);
-	__sanitize_memcov_trace_access_safe(0, 0, 0, type);
+	__sanitize_memcov_trace_access_safe(0, 0, 0, typ);
 }
 
 void __sanitize_memcov_trace_store(unsigned long inst, void *addr, size_t size)
