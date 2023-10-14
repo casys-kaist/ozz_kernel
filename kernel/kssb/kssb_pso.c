@@ -11,6 +11,7 @@
 #include <linux/kasan.h>
 #include <asm/unwind.h>
 #include <linux/spinlock.h>
+#include <linux/atomic.h>
 
 /* #define __DEBUG */
 
@@ -34,11 +35,24 @@ static DEFINE_PER_CPU(struct store_buffer, buffer) = {
 static struct store_history global_history = {
 	.table = { [0 ...((1 << (STOREHISTORY_BITS)) - 1)] = HLIST_HEAD_INIT },
 };
+
 // XXX: using lock surely slow down the kernel so I personally don't
 // like it. Anyway in this project we have only two threads that one
 // is mostly suspended, and it is very unlikely that there is a lock
 // contention on this lock.
-DEFINE_SPINLOCK(history_lock);
+atomic_t __history_lock;
+static void history_lock(void)
+{
+	int old = 0;
+	do {
+	} while (atomic_try_cmpxchg(&__history_lock, &old, 1));
+}
+
+static void history_unlock(void)
+{
+	// XXX: Missing write memory barrier. Whatever.
+	atomic_set(&__history_lock, 0);
+}
 
 static uint64_t commit_count;
 static DEFINE_PER_CPU(uint64_t, latest_access) = 0;
@@ -175,11 +189,11 @@ static void clear_history(void)
 	struct kssb_buffer_entry *entry;
 	struct hlist_node *tmp;
 	struct store_history *history = (struct store_history *)&global_history;
-	spin_lock(&history_lock);
+	history_lock();
 	hash_for_each_safe(history->table, bkt, tmp, entry, hlist) {
 		reclaim_entry_from_history(entry);
 	}
-	spin_unlock(&history_lock);
+	history_unlock();
 }
 
 static void charge_past_value(struct kssb_buffer_entry *entry)
@@ -219,7 +233,7 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	/*        kssb_page_net_present(&entry->access)); */
 
 	// Below should be atomic, or commit order will be corrupted
-	spin_lock(&history_lock);
+	history_lock();
 	// Charge the past value in to the entry, and then update the
 	// value in memory
 	charge_past_value(entry);
@@ -228,7 +242,7 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	// entry to the history buffer.
 	hash_del(&(entry->hlist));
 	record_history(entry);
-	spin_unlock(&history_lock);
+	history_unlock();
 }
 
 static void do_buffer_flush(uint64_t aligned_addr)
@@ -355,13 +369,13 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
 		     acc->aligned_addr, acc->offset, acc->size);
 
-	spin_lock(&history_lock);
+	history_lock();
 	if (load_old_value)
 		ret = do_buffer_load_from_history(acc);
 
 	if (!ret)
 		ret = do_buffer_load_latest(acc);
-	spin_unlock(&history_lock);
+	history_unlock();
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
 
