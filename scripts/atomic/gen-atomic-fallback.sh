@@ -151,7 +151,7 @@ cat << EOF
 #ifndef ${basename}_no_kssb_flush
 #define ${basename}_no_kssb_flush ${basename}
 #endif
-#define ${basename}_acquire ${basename}_no_kssb_flush
+#define ${basename}_acquire ${basename}
 #define ${basename}_release ${basename}
 #define ${basename}_relaxed ${basename}_no_kssb_flush
 EOF
@@ -301,8 +301,10 @@ cat << EOF
 #if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
 extern void __ssb_pso_flush(void);
 #define kssb_flush() __ssb_pso_flush()
+#define kssb_lfence() __ssb_pso_lfence()
 #else
 #define kssb_flush() do {} while(0)
+#define kssb_lfence() do {} while(0)
 #endif
 
 EOF

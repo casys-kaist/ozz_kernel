@@ -2,4 +2,5 @@ cat <<EOF
 	kssb_flush();
 	__atomic_release_fence();
 	${retstmt}arch_${atomic}_${pfx}${name}${sfx}_relaxed(${args});
+	kssb_lfence();
 EOF

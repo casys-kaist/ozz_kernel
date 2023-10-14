@@ -6,4 +6,5 @@ cat <<EOF
 		__atomic_release_fence();
 		raw_${atomic}_set(v, i);
 	}
+	kssb_lfence();
 EOF

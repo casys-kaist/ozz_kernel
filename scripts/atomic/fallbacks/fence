@@ -4,5 +4,6 @@ cat <<EOF
 	__atomic_pre_full_fence();
 	ret = arch_${atomic}_${pfx}${name}${sfx}_relaxed(${args});
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 EOF

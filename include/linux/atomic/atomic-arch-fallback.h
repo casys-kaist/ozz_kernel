@@ -11,8 +11,10 @@
 #if defined(CONFIG_KSSB) && !defined(NO_INSTRUMENT_ATOMIC)
 extern void __ssb_pso_flush(void);
 #define kssb_flush() __ssb_pso_flush()
+#define kssb_lfence() __ssb_pso_lfence()
 #else
 #define kssb_flush() do {} while(0)
+#define kssb_lfence() do {} while(0)
 #endif
 
 #if defined(arch_xchg)
@@ -525,6 +527,7 @@ raw_atomic_set_release(atomic_t *v, int i)
 		__atomic_release_fence();
 		raw_atomic_set(v, i);
 	}
+	kssb_lfence();
 #endif
 }
 
@@ -567,6 +570,7 @@ raw_atomic_add_return(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_add_return_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic_add_return"
@@ -620,6 +624,7 @@ raw_atomic_add_return_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_add_return_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_add_return)
 	return arch_atomic_add_return(i, v);
 #else
@@ -672,6 +677,7 @@ raw_atomic_fetch_add(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_add_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic_fetch_add"
@@ -725,6 +731,7 @@ raw_atomic_fetch_add_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_add_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_add)
 	return arch_atomic_fetch_add(i, v);
 #else
@@ -794,6 +801,7 @@ raw_atomic_sub_return(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_sub_return_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic_sub_return"
@@ -847,6 +855,7 @@ raw_atomic_sub_return_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_sub_return_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_sub_return)
 	return arch_atomic_sub_return(i, v);
 #else
@@ -899,6 +908,7 @@ raw_atomic_fetch_sub(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_sub_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic_fetch_sub"
@@ -952,6 +962,7 @@ raw_atomic_fetch_sub_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_sub_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_sub)
 	return arch_atomic_fetch_sub(i, v);
 #else
@@ -1023,6 +1034,7 @@ raw_atomic_inc_return(atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_inc_return_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic_add_return(1, v);
@@ -1074,6 +1086,7 @@ raw_atomic_inc_return_release(atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_inc_return_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic_inc_return)
 	return arch_atomic_inc_return(v);
 #else
@@ -1124,6 +1137,7 @@ raw_atomic_fetch_inc(atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_inc_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic_fetch_add(1, v);
@@ -1175,6 +1189,7 @@ raw_atomic_fetch_inc_release(atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_inc_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_inc)
 	return arch_atomic_fetch_inc(v);
 #else
@@ -1245,6 +1260,7 @@ raw_atomic_dec_return(atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_dec_return_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic_sub_return(1, v);
@@ -1296,6 +1312,7 @@ raw_atomic_dec_return_release(atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_dec_return_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic_dec_return)
 	return arch_atomic_dec_return(v);
 #else
@@ -1346,6 +1363,7 @@ raw_atomic_fetch_dec(atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_dec_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic_fetch_sub(1, v);
@@ -1397,6 +1415,7 @@ raw_atomic_fetch_dec_release(atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_dec_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_dec)
 	return arch_atomic_fetch_dec(v);
 #else
@@ -1465,6 +1484,7 @@ raw_atomic_fetch_and(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_and_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic_fetch_and"
@@ -1518,6 +1538,7 @@ raw_atomic_fetch_and_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_and_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_and)
 	return arch_atomic_fetch_and(i, v);
 #else
@@ -1591,6 +1612,7 @@ raw_atomic_fetch_andnot(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_andnot_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic_fetch_and(~i, v);
@@ -1644,6 +1666,7 @@ raw_atomic_fetch_andnot_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_andnot_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_andnot)
 	return arch_atomic_fetch_andnot(i, v);
 #else
@@ -1713,6 +1736,7 @@ raw_atomic_fetch_or(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_or_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic_fetch_or"
@@ -1766,6 +1790,7 @@ raw_atomic_fetch_or_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_or_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_or)
 	return arch_atomic_fetch_or(i, v);
 #else
@@ -1835,6 +1860,7 @@ raw_atomic_fetch_xor(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_fetch_xor_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic_fetch_xor"
@@ -1888,6 +1914,7 @@ raw_atomic_fetch_xor_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_fetch_xor_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_fetch_xor)
 	return arch_atomic_fetch_xor(i, v);
 #else
@@ -1940,6 +1967,7 @@ raw_atomic_xchg(atomic_t *v, int new)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_xchg_relaxed(v, new);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_xchg(&v->counter, new);
@@ -1993,6 +2021,7 @@ raw_atomic_xchg_release(atomic_t *v, int new)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_xchg_relaxed(v, new);
+	kssb_lfence();
 #elif defined(arch_atomic_xchg)
 	return arch_atomic_xchg(v, new);
 #else
@@ -2046,6 +2075,7 @@ raw_atomic_cmpxchg(atomic_t *v, int old, int new)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_cmpxchg(&v->counter, old, new);
@@ -2101,6 +2131,7 @@ raw_atomic_cmpxchg_release(atomic_t *v, int old, int new)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_cmpxchg_relaxed(v, old, new);
+	kssb_lfence();
 #elif defined(arch_atomic_cmpxchg)
 	return arch_atomic_cmpxchg(v, old, new);
 #else
@@ -2156,6 +2187,7 @@ raw_atomic_try_cmpxchg(atomic_t *v, int *old, int new)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_try_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	int r, o = *old;
@@ -2221,6 +2253,7 @@ raw_atomic_try_cmpxchg_release(atomic_t *v, int *old, int new)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_try_cmpxchg_relaxed(v, old, new);
+	kssb_lfence();
 #elif defined(arch_atomic_try_cmpxchg)
 	return arch_atomic_try_cmpxchg(v, old, new);
 #else
@@ -2344,6 +2377,7 @@ raw_atomic_add_negative(int i, atomic_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic_add_negative_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic_add_return(i, v) < 0;
@@ -2397,6 +2431,7 @@ raw_atomic_add_negative_release(int i, atomic_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic_add_negative_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic_add_negative)
 	return arch_atomic_add_negative(i, v);
 #else
@@ -2674,6 +2709,7 @@ raw_atomic64_set_release(atomic64_t *v, s64 i)
 		__atomic_release_fence();
 		raw_atomic64_set(v, i);
 	}
+	kssb_lfence();
 #endif
 }
 
@@ -2716,6 +2752,7 @@ raw_atomic64_add_return(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_add_return_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic64_add_return"
@@ -2769,6 +2806,7 @@ raw_atomic64_add_return_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_add_return_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_add_return)
 	return arch_atomic64_add_return(i, v);
 #else
@@ -2821,6 +2859,7 @@ raw_atomic64_fetch_add(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_add_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic64_fetch_add"
@@ -2874,6 +2913,7 @@ raw_atomic64_fetch_add_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_add_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_add)
 	return arch_atomic64_fetch_add(i, v);
 #else
@@ -2943,6 +2983,7 @@ raw_atomic64_sub_return(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_sub_return_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic64_sub_return"
@@ -2996,6 +3037,7 @@ raw_atomic64_sub_return_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_sub_return_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_sub_return)
 	return arch_atomic64_sub_return(i, v);
 #else
@@ -3048,6 +3090,7 @@ raw_atomic64_fetch_sub(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_sub_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic64_fetch_sub"
@@ -3101,6 +3144,7 @@ raw_atomic64_fetch_sub_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_sub_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_sub)
 	return arch_atomic64_fetch_sub(i, v);
 #else
@@ -3172,6 +3216,7 @@ raw_atomic64_inc_return(atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_inc_return_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic64_add_return(1, v);
@@ -3223,6 +3268,7 @@ raw_atomic64_inc_return_release(atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_inc_return_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic64_inc_return)
 	return arch_atomic64_inc_return(v);
 #else
@@ -3273,6 +3319,7 @@ raw_atomic64_fetch_inc(atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_inc_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic64_fetch_add(1, v);
@@ -3324,6 +3371,7 @@ raw_atomic64_fetch_inc_release(atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_inc_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_inc)
 	return arch_atomic64_fetch_inc(v);
 #else
@@ -3394,6 +3442,7 @@ raw_atomic64_dec_return(atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_dec_return_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic64_sub_return(1, v);
@@ -3445,6 +3494,7 @@ raw_atomic64_dec_return_release(atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_dec_return_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic64_dec_return)
 	return arch_atomic64_dec_return(v);
 #else
@@ -3495,6 +3545,7 @@ raw_atomic64_fetch_dec(atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_dec_relaxed(v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic64_fetch_sub(1, v);
@@ -3546,6 +3597,7 @@ raw_atomic64_fetch_dec_release(atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_dec_relaxed(v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_dec)
 	return arch_atomic64_fetch_dec(v);
 #else
@@ -3614,6 +3666,7 @@ raw_atomic64_fetch_and(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_and_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic64_fetch_and"
@@ -3667,6 +3720,7 @@ raw_atomic64_fetch_and_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_and_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_and)
 	return arch_atomic64_fetch_and(i, v);
 #else
@@ -3740,6 +3794,7 @@ raw_atomic64_fetch_andnot(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_andnot_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic64_fetch_and(~i, v);
@@ -3793,6 +3848,7 @@ raw_atomic64_fetch_andnot_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_andnot_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_andnot)
 	return arch_atomic64_fetch_andnot(i, v);
 #else
@@ -3862,6 +3918,7 @@ raw_atomic64_fetch_or(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_or_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic64_fetch_or"
@@ -3915,6 +3972,7 @@ raw_atomic64_fetch_or_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_or_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_or)
 	return arch_atomic64_fetch_or(i, v);
 #else
@@ -3984,6 +4042,7 @@ raw_atomic64_fetch_xor(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_fetch_xor_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 #error "Unable to define raw_atomic64_fetch_xor"
@@ -4037,6 +4096,7 @@ raw_atomic64_fetch_xor_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_fetch_xor_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_fetch_xor)
 	return arch_atomic64_fetch_xor(i, v);
 #else
@@ -4089,6 +4149,7 @@ raw_atomic64_xchg(atomic64_t *v, s64 new)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_xchg_relaxed(v, new);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_xchg(&v->counter, new);
@@ -4142,6 +4203,7 @@ raw_atomic64_xchg_release(atomic64_t *v, s64 new)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_xchg_relaxed(v, new);
+	kssb_lfence();
 #elif defined(arch_atomic64_xchg)
 	return arch_atomic64_xchg(v, new);
 #else
@@ -4195,6 +4257,7 @@ raw_atomic64_cmpxchg(atomic64_t *v, s64 old, s64 new)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_cmpxchg(&v->counter, old, new);
@@ -4250,6 +4313,7 @@ raw_atomic64_cmpxchg_release(atomic64_t *v, s64 old, s64 new)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_cmpxchg_relaxed(v, old, new);
+	kssb_lfence();
 #elif defined(arch_atomic64_cmpxchg)
 	return arch_atomic64_cmpxchg(v, old, new);
 #else
@@ -4305,6 +4369,7 @@ raw_atomic64_try_cmpxchg(atomic64_t *v, s64 *old, s64 new)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_try_cmpxchg_relaxed(v, old, new);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	s64 r, o = *old;
@@ -4370,6 +4435,7 @@ raw_atomic64_try_cmpxchg_release(atomic64_t *v, s64 *old, s64 new)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_try_cmpxchg_relaxed(v, old, new);
+	kssb_lfence();
 #elif defined(arch_atomic64_try_cmpxchg)
 	return arch_atomic64_try_cmpxchg(v, old, new);
 #else
@@ -4493,6 +4559,7 @@ raw_atomic64_add_negative(s64 i, atomic64_t *v)
 	__atomic_pre_full_fence();
 	ret = arch_atomic64_add_negative_relaxed(i, v);
 	__atomic_post_full_fence();
+	kssb_lfence();
 	return ret;
 #else
 	return raw_atomic64_add_return(i, v) < 0;
@@ -4546,6 +4613,7 @@ raw_atomic64_add_negative_release(s64 i, atomic64_t *v)
 	kssb_flush();
 	__atomic_release_fence();
 	return arch_atomic64_add_negative_relaxed(i, v);
+	kssb_lfence();
 #elif defined(arch_atomic64_add_negative)
 	return arch_atomic64_add_negative(i, v);
 #else
@@ -4730,4 +4798,4 @@ raw_atomic64_dec_if_positive(atomic64_t *v)
 }
 
 #endif /* _LINUX_ATOMIC_FALLBACK_H */
-// a06a11e8184e34496e379d624beb992033d60875
+// 3becf0cfcc7089ed428e8d5a2a78e63840593c34

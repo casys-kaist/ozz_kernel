@@ -23,12 +23,14 @@
 // XXX: We don't want to emulate TSO, so use PSO here
 extern void __ssb_pso_flush(void);
 #define kssb_flush() __ssb_pso_flush()
+#define kssb_lfence() __ssb_pso_lfence()
 #else
 #define kssb_flush() do {} while(0)
+#define kssb_lfence() do {} while(0)
 #endif
 
 #define kssb_flush_release() kssb_flush()
-#define kssb_flush_acquire() do {} while(0)
+#define kssb_flush_acquire() kssb_lfence()
 
 /**
  * atomic_read() - atomic load with relaxed ordering
@@ -5213,4 +5215,4 @@ atomic_long_dec_if_positive(atomic_long_t *v)
 
 
 #endif /* _LINUX_ATOMIC_INSTRUMENTED_H */
-// 5b8c359fa46a98d01b94a844df1e5e88cc2e1703
+// dc1a6b0a14025fcb16695e1b88137e86b6158497
