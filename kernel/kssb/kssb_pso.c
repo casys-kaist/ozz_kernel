@@ -207,14 +207,14 @@ static void charge_past_value(struct kssb_buffer_entry *entry)
 static void record_history(struct kssb_buffer_entry *entry)
 {
 	struct hlist_node *tmp;
+	struct kssb_buffer_entry *iter;
 	struct store_history *history = (struct store_history *)&global_history;
 	uint64_t aligned_addr = entry->access.aligned_addr;
-
 	// Remove duplicated entry first
-	hash_for_each_possible_safe(history->table, entry, tmp, hlist,
+	hash_for_each_possible_safe(history->table, iter, tmp, hlist,
 				    aligned_addr) {
-		if (entry->access.aligned_addr == aligned_addr)
-			reclaim_entry_from_history(entry);
+		if (iter->access.aligned_addr == aligned_addr)
+			reclaim_entry_from_history(iter);
 	}
 	// Then record the history
 	hash_add(history->table, &(entry->hlist),
