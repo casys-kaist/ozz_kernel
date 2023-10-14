@@ -70,6 +70,52 @@ static struct file_operations kssb_do_profile_fops = {
 	.write = do_profile_write,
 };
 
+extern bool load_prefetch_enabled;
+extern volatile char __ssb_do_emulate;
+
+static ssize_t load_prefetch_enabled_read(struct file *filp, char __user *ubuf,
+					  size_t cnt, loff_t *ppos)
+{
+	char buf[8];
+	int len;
+	BUG_ON(__ssb_do_emulate);
+	len = sprintf(buf, "%d\n", load_prefetch_enabled);
+	return simple_read_from_buffer(ubuf, cnt, ppos, buf, len);
+}
+
+static ssize_t load_prefetch_enabled_write(struct file *filp,
+					   const char __user *ubuf, size_t cnt,
+					   loff_t *ppos)
+{
+	char buf[8];
+	unsigned long val;
+	int ret;
+
+	BUG_ON(__ssb_do_emulate);
+
+	if (cnt >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(&buf, ubuf, cnt))
+		return -EFAULT;
+
+	buf[cnt] = 0;
+
+	ret = kstrtoul(buf, 10, &val);
+	if (ret < 0)
+		return ret;
+
+	load_prefetch_enabled = !!val;
+
+	return cnt;
+}
+
+static struct file_operations load_prefetch_enabled_fops = {
+	.open = simple_open,
+	.read = load_prefetch_enabled_read,
+	.write = load_prefetch_enabled_write,
+};
+
 static int kssb_emulated_inst_open(struct inode *inode, struct file *filp)
 {
 	return single_open(filp, profile_emulated_inst_show, NULL);
@@ -97,6 +143,8 @@ int __init kssb_debugfs_init(void)
 			    &kssb_stats_fops);
 	debugfs_create_file("do_profile", 0666, kssb_debugfs_dir, NULL,
 			    &kssb_do_profile_fops);
+	debugfs_create_file("load_prefetch_enabled", 0666, kssb_debugfs_dir,
+			    NULL, &load_prefetch_enabled_fops);
 	debugfs_create_file("emulated_inst", 0666, kssb_debugfs_dir, NULL,
 			    &kssb_emulated_inst_fops);
 	return 0;

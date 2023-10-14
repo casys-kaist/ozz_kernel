@@ -17,6 +17,8 @@
 
 #include "kssb.h"
 
+bool load_prefetch_enabled = false;
+
 #define STOREBUFFER_BITS 10
 struct store_buffer {
 	DECLARE_HASHTABLE(table, STOREBUFFER_BITS);
@@ -43,6 +45,8 @@ static struct store_history global_history = {
 atomic_t __history_lock;
 static void history_lock(void)
 {
+	if (!load_prefetch_enabled)
+		return;
 	int old = 0;
 	do {
 	} while (atomic_try_cmpxchg(&__history_lock, &old, 1));
@@ -50,6 +54,8 @@ static void history_lock(void)
 
 static void history_unlock(void)
 {
+	if (!load_prefetch_enabled)
+		return;
 	// XXX: Missing write memory barrier. Whatever.
 	atomic_set(&__history_lock, 0);
 }
@@ -198,6 +204,8 @@ static void clear_history(void)
 
 static void charge_past_value(struct kssb_buffer_entry *entry)
 {
+	if (!load_prefetch_enabled)
+		return;
 	__this_cpu_write(latest_access, ++commit_count);
 	entry->access.timestamp = commit_count;
 	entry->access.aligned_old_val =
@@ -241,7 +249,10 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	// Remove entry from the store buffer first, and then move the
 	// entry to the history buffer.
 	hash_del(&(entry->hlist));
-	record_history(entry);
+	if (load_prefetch_enabled)
+		record_history(entry);
+	else
+		reclaim_entry(entry);
 	history_unlock();
 }
 
@@ -327,6 +338,8 @@ static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
 
 static inline void update_latest_access(uint64_t new)
 {
+	if (!load_prefetch_enabled)
+		return;
 	uint64_t old_access = __this_cpu_read(latest_access);
 	__this_cpu_write(latest_access, (new > old_access) ? new : old_access);
 }
@@ -364,7 +377,8 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 {
 	bool ok = false;
 	uint64_t ret = 0;
-	bool load_old_value = !flush_vector_next(acc->inst);
+	bool load_old_value = load_prefetch_enabled &&
+			      !flush_vector_next(acc->inst);
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned (%px, %lu, %d)\n",
 		     acc->aligned_addr, acc->offset, acc->size);
