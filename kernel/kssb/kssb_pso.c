@@ -331,20 +331,19 @@ static inline void update_latest_access(uint64_t new)
 	__this_cpu_write(latest_access, (new > old_access) ? new : old_access);
 }
 
-static uint64_t do_buffer_load_from_history(struct kssb_access *acc)
+static bool do_buffer_load_from_history(struct kssb_access *acc, uint64_t *ret)
 {
-	uint64_t ret;
 	struct kssb_buffer_entry *old = get_history(acc);
 
 	if (!old)
-		return 0;
+		return false;
 
-	ret = ((old->access.aligned_old_val) >> _BITS(acc->offset)) &
-	      _BIT_MASK(_BITS(acc->size));
+	*ret = ((old->access.aligned_old_val) >> _BITS(acc->offset)) &
+	       _BIT_MASK(_BITS(acc->size));
 	update_latest_access(old->access.timestamp);
 	reclaim_entry_from_history(old);
 
-	return ret;
+	return true;
 }
 
 static uint64_t do_buffer_load_latest(struct kssb_access *acc)
@@ -363,6 +362,7 @@ static uint64_t do_buffer_load_latest(struct kssb_access *acc)
 
 static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 {
+	bool ok = false;
 	uint64_t ret = 0;
 	bool load_old_value = !flush_vector_next(acc->inst);
 
@@ -371,9 +371,9 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 
 	history_lock();
 	if (load_old_value)
-		ret = do_buffer_load_from_history(acc);
+		ok = do_buffer_load_from_history(acc, &ret);
 
-	if (!ret)
+	if (!ok)
 		ret = do_buffer_load_latest(acc);
 	history_unlock();
 
