@@ -57,6 +57,7 @@
 #include <linux/kprobes.h>
 #include <linux/lockdep.h>
 #include <linux/kmemcov.h>
+#include <linux/kmemcov-lock.h>
 #include <linux/qcsched/qcsched.h>
 #include <linux/context_tracking.h>
 
@@ -5750,8 +5751,11 @@ void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 	}
 
 	if (unlikely(current->kmemcov_mode == KMEMCOV_MODE_TRACE_STLD) &&
-		in_task())
+		in_task()) {
 			qcsched_vmi_hint_lock_acquire(lock, trylock, read, ip);
+			if (!trylock && !read)
+				sanitize_memcov_trace_lock_acquire(lock);
+	}
 
 	raw_local_irq_save(flags);
 	check_flags(flags);
@@ -5783,8 +5787,10 @@ void lock_release(struct lockdep_map *lock, unsigned long ip)
 	raw_local_irq_restore(flags);
 
 	if (unlikely(current->kmemcov_mode == KMEMCOV_MODE_TRACE_STLD) &&
-		in_task())
+		in_task()) {
 			qcsched_vmi_hint_lock_release(lock);
+			sanitize_memcov_trace_lock_release(lock);
+	}
 }
 EXPORT_SYMBOL_GPL(lock_release);
 
