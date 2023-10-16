@@ -339,10 +339,46 @@ static const struct file_operations kmemcov_fops = {
 	.release = kmemcov_close,
 };
 
+static ssize_t kmemcov_trace_lock_read(struct file *filp, char __user *ubuf,
+				       size_t cnt, loff_t *ppos)
+{
+	char buf[8];
+	int len;
+	len = sprintf(buf, "%d\n", kmemcov_trace_lock);
+	return simple_read_from_buffer(ubuf, cnt, ppos, buf, len);
+}
+
+static ssize_t kmemcov_trace_lock_write(struct file *filp,
+					const char __user *ubuf, size_t cnt,
+					loff_t *ppos)
+{
+	char buf[8];
+	unsigned long val;
+	int ret;
+	if (cnt >= sizeof(buf))
+		return -EINVAL;
+	if (copy_from_user(&buf, ubuf, cnt))
+		return -EFAULT;
+	buf[cnt] = 0;
+	ret = kstrtoul(buf, 10, &val);
+	if (ret < 0)
+		return ret;
+	kmemcov_trace_lock = !!val;
+	return cnt;
+}
+
+static struct file_operations kmemcov_trace_lock_fops = {
+	.open = simple_open,
+	.read = kmemcov_trace_lock_read,
+	.write = kmemcov_trace_lock_write,
+};
+
 static int __init kmemcov_init(void)
 {
 	atomic_set(&kmemcov_clock, 0);
 	debugfs_create_file_unsafe("kmemcov", 0600, NULL, NULL, &kmemcov_fops);
+	debugfs_create_file_unsafe("kmemcov_trace_lock", 0666, NULL, NULL,
+				   &kmemcov_trace_lock_fops);
 	return 0;
 }
 
