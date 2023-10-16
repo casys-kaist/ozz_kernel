@@ -610,6 +610,7 @@ static void __lfence_callback_pso(void)
 	unsigned long flags;
 	raw_local_irq_save(flags);
 	if (in_kssb_enabled_task()) {
+		profile_lfence();
 		since = __this_cpu_read(latest_access);
 		__this_cpu_write(load_since, since);
 		sanitize_memcov_trace_lfence();

@@ -14,6 +14,7 @@ static int kssb_profile_show(struct seq_file *m, void *v)
 	seq_printf(m, "load  %5d\n", atomic64_read(&stat->load_count));
 	seq_printf(m, "store %5d\n", atomic64_read(&stat->store_count));
 	seq_printf(m, "flush %5d\n", atomic64_read(&stat->flush_count));
+	seq_printf(m, "lfence %5d\n", atomic64_read(&stat->lfence_count));
 	seq_printf(m, "retchk %5d\n", atomic64_read(&stat->retchk_count));
 	seq_printf(m, "funcentry %5d\n", atomic64_read(&stat->funcentry_count));
 	return 0;

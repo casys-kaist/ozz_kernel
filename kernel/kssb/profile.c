@@ -44,6 +44,13 @@ void profile_retchk(void *ret)
 	atomic64_add(1, &kssb_stat.retchk_count);
 }
 
+void profile_lfence(void)
+{
+	if (likely(!kssb_do_profile))
+		return;
+	atomic64_add(1, &kssb_stat.lfence_count);
+}
+
 void profile_funcentry(void *ret)
 {
 	if (likely(!kssb_do_profile))

@@ -13,6 +13,7 @@ struct kssb_stat_t {
 	atomic64_t flush_count;
 	atomic64_t retchk_count;
 	atomic64_t funcentry_count;
+	atomic64_t lfence_count;
 };
 
 extern struct kssb_stat_t kssb_stat;
@@ -24,6 +25,7 @@ void profile_flush(uint64_t);
 void profile_retchk(void *);
 void profile_funcentry(void *);
 void profile_reset(void);
+void profile_lfence(void);
 int profile_emulated_inst_show(struct seq_file *m, void *v);
 void profile_reset_emulated_inst(void);
 #else
@@ -38,6 +40,9 @@ void profile_reset_emulated_inst(void);
 	} while (0)
 #define profile_reset(...) \
 	do {               \
+	} while (0)
+#define profile_lfence(...) \
+	do {                \
 	} while (0)
 #define profile_retchk(...) \
 	do {                \
