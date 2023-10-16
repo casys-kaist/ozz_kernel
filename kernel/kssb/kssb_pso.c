@@ -609,11 +609,11 @@ static void __lfence_callback_pso(void)
 	uint64_t since;
 	unsigned long flags;
 	raw_local_irq_save(flags);
+	sanitize_memcov_trace_lfence();
 	if (in_kssb_enabled_task()) {
 		profile_lfence();
 		since = __this_cpu_read(latest_access);
 		__this_cpu_write(load_since, since);
-		sanitize_memcov_trace_lfence();
 	}
 	raw_local_irq_restore(flags);
 }
