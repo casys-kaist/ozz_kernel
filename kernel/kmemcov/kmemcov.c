@@ -33,6 +33,8 @@ struct kmemcov {
 
 static atomic_t kmemcov_clock;
 
+bool kmemcov_trace_lock = false;
+
 static bool notrace check_kmemcov_mode(enum kmemcov_mode needed_mode,
 				       struct task_struct *t)
 {
@@ -90,7 +92,7 @@ static void __always_inline notrace __sanitize_memcov_trace_access(
 		return;
 	__sanitize_memcov_trace_access_safe(inst, addr, size,
 					    (write ? KMEMCOV_ACCESS_STORE :
-							   KMEMCOV_ACCESS_LOAD));
+						     KMEMCOV_ACCESS_LOAD));
 }
 
 static void __always_inline notrace __sanitize_memcov_trace_barrier(bool store)
@@ -102,6 +104,19 @@ static void __always_inline notrace __sanitize_memcov_trace_barrier(bool store)
 	typ = (store ? KMEMCOV_ACCESS_FLUSH : KMEMCOV_ACCESS_LFENCE);
 	__sanitize_memcov_trace_access_safe(0, 0, 0, typ);
 }
+
+void __always_inline notrace __sanitize_memcov_trace_lock(void *lockdep,
+							  bool acquire)
+{
+	enum kmemcov_access_type typ;
+	struct task_struct *t = current;
+	if (!check_kmemcov_mode(KMEMCOV_MODE_TRACE_STLD, t))
+		return;
+	typ = (acquire ? KMEMCOV_ACCESS_LOCK_ACQUIRE :
+			 KMEMCOV_ACCESS_LOCK_RELEASE);
+	__sanitize_memcov_trace_access_safe(0, lockdep, 0, typ);
+}
+EXPORT_SYMBOL(__sanitize_memcov_trace_lock);
 
 void __sanitize_memcov_trace_store(unsigned long inst, void *addr, size_t size)
 {

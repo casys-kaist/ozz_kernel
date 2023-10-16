@@ -21,18 +21,39 @@ void sanitize_memcov_trace_store(const volatile void *addr, size_t size);
 void sanitize_memcov_trace_load(const volatile void *addr, size_t size);
 void sanitize_memcov_trace_flush(void);
 void sanitize_memcov_trace_lfence(void);
-
+void __sanitize_memcov_trace_lock(void *lockdep, bool acquire);
 #else
 
-#define kmemcov_task_init(...) do { } while (0)
-#define kmemcov_task_exit(...) do { } while (0)
-#define __sanitize_memcov_trace_store(...) do { } while (0)
-#define __sanitize_memcov_trace_load(...) do { } while (0)
-#define sanitize_memcov_trace_store(...) do { } while (0)
-#define sanitize_memcov_trace_load(...) do { } while (0)
-#define sanitize_memcov_trace_flush(...) do { } while (0)
-#define sanitize_memcov_trace_lfence(...) do { } while (0)
-
+#define kmemcov_task_init(...) \
+	do {                   \
+	} while (0)
+#define kmemcov_task_exit(...) \
+	do {                   \
+	} while (0)
+#define __sanitize_memcov_trace_store(...) \
+	do {                               \
+	} while (0)
+#define __sanitize_memcov_trace_load(...) \
+	do {                              \
+	} while (0)
+#define sanitize_memcov_trace_store(...) \
+	do {                             \
+	} while (0)
+#define sanitize_memcov_trace_load(...) \
+	do {                            \
+	} while (0)
+#define sanitize_memcov_trace_flush(...) \
+	do {                             \
+	} while (0)
+#define sanitize_memcov_trace_lfence(...) \
+	do {                              \
+	} while (0)
+#define sanitize_memcov_trace_lock_acquire(...) \
+	do {                                    \
+	} while (0)
+#define sanitize_memcov_trace_lock_release(...) \
+	do {                                    \
+	} while (0)
 #endif /* CONFIG_KMEMCOV */
 
 #endif /* __LINUX_KMEMCOV_H */
