@@ -72,9 +72,10 @@ __sanitize_memcov_trace_access_safe(unsigned long inst, void *addr, size_t size,
 	posp = (unsigned long *)&area[0];
 	pos = READ_ONCE(*posp);
 
-	// We don't have to record subsequent flushes.
-	if (pos > 0 && type == KMEMCOV_ACCESS_FLUSH &&
-	    area[pos].type == KMEMCOV_ACCESS_FLUSH)
+	// We don't have to record subsequent barriers
+	if (pos > 0 &&
+	    (type == KMEMCOV_ACCESS_FLUSH || type == KMEMCOV_ACCESS_LFENCE) &&
+	    area[pos].type == type)
 		return;
 
 	pos++;
