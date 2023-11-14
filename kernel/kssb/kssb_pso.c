@@ -17,6 +17,8 @@
 
 #include "kssb.h"
 
+#define UNKNOWN_VALUE 0xdead
+
 bool load_prefetch_enabled = false;
 
 #define STOREBUFFER_BITS 10
@@ -556,6 +558,30 @@ static bool kssb_enabled(void)
 	INIT_KSSB_ACCESS(_addr, 0, _size, kssb_load, inst)
 #define INIT_KSSB_STORE(_addr, _val, _size, inst) \
 	INIT_KSSB_ACCESS(_addr, _val, _size, kssb_store, inst)
+
+void kssb_record_history(const volatile void *v, size_t size)
+{
+	struct kssb_buffer_entry *entry;
+	unsigned long flags;
+	unsigned long inst = _RET_IP_;
+	struct kssb_access *accp,
+		acc = INIT_KSSB_STORE((uint64_t *)v, UNKNOWN_VALUE, size, inst);
+	accp = &acc;
+
+	raw_local_irq_save(flags);
+	if (CAN_EMULATE_KSSB(accp) && load_prefetch_enabled) {
+		align_access(accp);
+
+		if ((entry = alloc_entry(accp))) {
+			charge_past_value(entry);
+			record_history(entry);
+		} else {
+			WARN_ONCE(1, "Store buffer is exhausted");
+		}
+	}
+	raw_local_irq_restore(flags);
+}
+EXPORT_SYMBOL(kssb_record_history);
 
 static uint64_t __load_callback_pso(uint64_t *addr, size_t size,
 				    unsigned long inst)
