@@ -5753,7 +5753,6 @@ void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 
 	if (unlikely(current->kmemcov_mode == KMEMCOV_MODE_TRACE_STLD) &&
 		in_task()) {
-			qcsched_vmi_hint_lock_acquire(lock, trylock, read, ip);
 			if (!trylock && !read)
 				sanitize_memcov_trace_lock_acquire(lock);
 	}
@@ -5789,7 +5788,6 @@ void lock_release(struct lockdep_map *lock, unsigned long ip)
 
 	if (unlikely(current->kmemcov_mode == KMEMCOV_MODE_TRACE_STLD) &&
 		in_task()) {
-			qcsched_vmi_hint_lock_release(lock);
 			sanitize_memcov_trace_lock_release(lock);
 	}
 }
