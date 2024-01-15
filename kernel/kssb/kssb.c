@@ -21,6 +21,8 @@ bool kssb_initialized = false;
 EXPORT_SYMBOL(kssb_initialized);
 
 #define BUFFER_PAGES 4
+#define HISTORY_PAGES 4
+
 // Non-contiguous per-cpu pages storing kssb_buffer_entry
 static DEFINE_PER_CPU(void *, kssb_buffer_pages);
 // Per-cpu cache for free kssb_buffer_entry. As new_entry() is the
@@ -30,16 +32,39 @@ static DEFINE_PER_CPU(void *, kssb_buffer_pages);
 // to access its own pool.
 static DEFINE_PER_CPU(struct llist_head, kssb_buffer_pool);
 
-struct kssb_buffer_entry *new_entry()
+// Non-contiguous per-cpu pages storing kssb_buffer_entry
+static DEFINE_PER_CPU(void *, kssb_history_pages);
+static DEFINE_PER_CPU(struct llist_head, kssb_history_pool);
+
+struct kssb_buffer_entry *__new_entry(struct llist_head *pcpu_pool)
 {
-	struct llist_head *pcpu_pool;
 	struct llist_node *llist;
 	struct kssb_buffer_entry *entry = NULL;
 
-	pcpu_pool = &get_cpu_var(kssb_buffer_pool);
 	if ((llist = __llist_del_first(pcpu_pool)))
 		entry = container_of(llist, struct kssb_buffer_entry, llist);
+	return entry;
+}
+
+struct kssb_buffer_entry *new_entry()
+{
+	struct llist_head *pcpu_pool;
+	struct kssb_buffer_entry *entry = NULL;
+
+	pcpu_pool = &get_cpu_var(kssb_buffer_pool);
+	entry = __new_entry(pcpu_pool);
 	put_cpu_var(kssb_buffer_pool);
+	return entry;
+}
+
+struct kssb_buffer_entry *new_history_entry()
+{
+	struct llist_head *pcpu_pool;
+	struct kssb_buffer_entry *entry = NULL;
+
+	pcpu_pool = &get_cpu_var(kssb_history_pool);
+	entry = __new_entry(pcpu_pool);
+	put_cpu_var(kssb_history_pool);
 	return entry;
 }
 
@@ -51,6 +76,12 @@ void __reclaim_entry(struct kssb_buffer_entry *entry, struct llist_head *llist)
 void reclaim_entry(struct kssb_buffer_entry *entry)
 {
 	struct llist_head *llist = per_cpu_ptr(&kssb_buffer_pool, entry->cpu);
+	__reclaim_entry(entry, llist);
+}
+
+void reclaim_history_entry(struct kssb_buffer_entry *entry)
+{
+	struct llist_head *llist = per_cpu_ptr(&kssb_history_pool, entry->cpu);
 	__reclaim_entry(entry, llist);
 }
 
@@ -237,7 +268,7 @@ static int __init kssb_init(void)
 	num_entries = buffer_size / sizeof(struct kssb_buffer_entry);
 
 	for_each_possible_cpu(cpu) {
-		printk(KERN_INFO "Allocating pages (CPU #%d)\n", cpu);
+		printk(KERN_INFO "Allocating pages for soft store buffer (CPU #%d)\n", cpu);
 		printk(KERN_INFO "  size       %d\n", buffer_size);
 		printk(KERN_INFO "  entry size %d\n",
 		       sizeof(struct kssb_buffer_entry));
@@ -249,6 +280,30 @@ static int __init kssb_init(void)
 
 		per_cpu(kssb_buffer_pages, cpu) = pcpu_pages;
 		pcpu_pool = per_cpu_ptr(&kssb_buffer_pool, cpu);
+		init_llist_head(pcpu_pool);
+		for (i = 0; i < num_entries; i++) {
+			ptr = &((struct kssb_buffer_entry *)pcpu_pages)[i];
+			ptr->cpu = cpu;
+			__reclaim_entry(ptr, pcpu_pool);
+		}
+	}
+
+	buffer_size = HISTORY_PAGES * PAGE_SIZE;
+	num_entries = buffer_size / sizeof(struct kssb_buffer_entry);
+
+	for_each_possible_cpu(cpu) {
+		printk(KERN_INFO "Allocating pages for store history buffer (CPU #%d)\n", cpu);
+		printk(KERN_INFO "  size       %d\n", buffer_size);
+		printk(KERN_INFO "  entry size %d\n",
+		       sizeof(struct kssb_buffer_entry));
+		printk(KERN_INFO "  entries    %d\n", num_entries);
+
+		pcpu_pages = vmalloc(buffer_size);
+
+		kssb_populate_pcpu_pages(pcpu_pages, buffer_size);
+
+		per_cpu(kssb_history_pages, cpu) = pcpu_pages;
+		pcpu_pool = per_cpu_ptr(&kssb_history_pool, cpu);
 		init_llist_head(pcpu_pool);
 		for (i = 0; i < num_entries; i++) {
 			ptr = &((struct kssb_buffer_entry *)pcpu_pages)[i];

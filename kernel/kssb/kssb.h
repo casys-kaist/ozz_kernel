@@ -44,7 +44,10 @@ struct kssb_buffer_entry {
 } __attribute__((aligned(128)));
 
 struct kssb_buffer_entry *new_entry(void);
+struct kssb_buffer_entry *new_history_entry(void);
+
 void reclaim_entry(struct kssb_buffer_entry *entry);
+void reclaim_history_entry(struct kssb_buffer_entry *entry);
 
 struct kssb_flush_table_entry {
 	unsigned long inst;
