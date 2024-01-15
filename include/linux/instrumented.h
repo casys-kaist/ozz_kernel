@@ -31,7 +31,7 @@
 #ifndef NO_RECORD_ATOMIC
 #define kssb_record(v, size) kssb_record_history(v, size)
 #else
-#define kssb_record(v, size) do { } while(0) 
+#define kssb_record(v, size) do { } while(0)
 #endif
 
 /**

@@ -361,18 +361,17 @@ static bool do_buffer_load_from_history(struct kssb_access *acc, uint64_t *ret)
 	return true;
 }
 
-static uint64_t do_buffer_load_latest(struct kssb_access *acc)
+static bool do_buffer_load_from_storebuffer(struct kssb_access *acc, uint64_t *ret)
 {
-	uint64_t ret;
 	struct kssb_buffer_entry *latest;
-	update_latest_access(commit_count);
 	// We don't have to masking upper bits of ret. It will be done
 	// when the value is returned.
-	if ((latest = latest_entry(acc)))
-		ret = __assemble_value(latest, acc);
-	else
-		ret = __load_single(acc);
-	return ret;
+	if ((latest = latest_entry(acc))) {
+		*ret = __assemble_value(latest, acc);
+		return true;
+	}
+
+	return false;
 }
 
 static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
@@ -386,11 +385,15 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 		     acc->aligned_addr, acc->offset, acc->size);
 
 	history_lock();
-	if (load_old_value)
+	ok = do_buffer_load_from_storebuffer(acc, &ret);
+	
+	if (!ok && load_old_value)
 		ok = do_buffer_load_from_history(acc, &ret);
 
-	if (!ok)
-		ret = do_buffer_load_latest(acc);
+	if (!ok) {
+		update_latest_access(commit_count);
+		ret = __load_single(acc);
+	}
 	history_unlock();
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
