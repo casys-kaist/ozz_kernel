@@ -107,8 +107,25 @@ static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 	// The store buffer is exhausted. Let's flush the store buffer and
 	// the history and give a second shot.
 	do_buffer_flush(0);
-	clear_history();
 	entry = new_entry();
+	if (entry)
+		goto success;
+	return NULL;
+success:
+	entry->access = *acc;
+	entry->pid = current->pid;
+	return entry;
+}
+
+static struct kssb_buffer_entry *alloc_history_entry(struct kssb_access *acc)
+{
+	struct kssb_buffer_entry *entry = new_history_entry();
+	if (entry)
+		goto success;
+	// The history buffer is exhausted. Let's flush the history buffer
+	// and give a second shot.
+	clear_history();
+	entry = new_history_entry();
 	if (entry)
 		goto success;
 	return NULL;
@@ -188,7 +205,7 @@ static void __flush_single_entry_po_preserve(struct kssb_access *acc)
 static void reclaim_entry_from_history(struct kssb_buffer_entry *entry)
 {
 	hash_del(&(entry->hlist));
-	reclaim_entry(entry);
+	reclaim_history_entry(entry);
 }
 
 static void clear_history(void)
@@ -233,6 +250,7 @@ static void record_history(struct kssb_buffer_entry *entry)
 
 static void flush_single_entry(struct kssb_buffer_entry *entry)
 {
+	struct kssb_buffer_entry *new_entry = NULL;
 	// We try our best to populate the page table entry before
 	// storing the entry in the store callback. So here we expect
 	// page table entries present for all entries. Although this
@@ -242,20 +260,25 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	/* BUG_ON(in_page_fault_handler() && */
 	/*        kssb_page_net_present(&entry->access)); */
 
-	// Below should be atomic, or commit order will be corrupted
-	history_lock();
-	// Charge the past value in to the entry, and then update the
-	// value in memory
-	charge_past_value(entry);
-	__store_single_memcov_trace(&(entry->access));
-	// Remove entry from the store buffer first, and then move the
-	// entry to the history buffer.
 	hash_del(&(entry->hlist));
-	if (load_prefetch_enabled)
-		record_history(entry);
-	else
-		reclaim_entry(entry);
+
+	if (load_prefetch_enabled) {
+		new_entry = alloc_history_entry(&(entry->access));
+		if (!new_entry) 
+			WARN_ONCE(1, "History buffer is exhausted");
+	}
+	history_lock();
+	if (new_entry) {
+		// Charge the past value in to the entry, and then update the
+		// value in memory
+		charge_past_value(new_entry);
+		// Remove entry from the store buffer first, and then move the
+		// entry to the history buffer.
+		record_history(new_entry);
+	}
+	__store_single_memcov_trace(&(entry->access));
 	history_unlock();
+	reclaim_entry(entry);
 }
 
 static void do_buffer_flush(uint64_t aligned_addr)
@@ -575,9 +598,11 @@ void kssb_record_history(const volatile void *v, size_t size)
 	if (CAN_EMULATE_KSSB(accp) && load_prefetch_enabled) {
 		align_access(accp);
 
-		if ((entry = alloc_entry(accp))) {
+		if ((entry = alloc_history_entry(accp))) {
+			history_lock();
 			charge_past_value(entry);
 			record_history(entry);
+			history_unlock();
 		} else {
 			WARN_ONCE(1, "Store buffer is exhausted");
 		}
