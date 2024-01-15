@@ -161,7 +161,8 @@ static struct kssb_buffer_entry *get_history(struct kssb_access *acc)
 		// Two different addrs are possibly mashed into a same
 		// bucket so we need to check the address
 		if ((entry->access.aligned_addr == acc->aligned_addr) &&
-		    (entry->access.timestamp > __this_cpu_read(load_since))) {
+		    (entry->access.timestamp > __this_cpu_read(load_since)) &&
+			(entry->cpu != smp_processor_id())) {
 			return entry;
 		}
 	}
