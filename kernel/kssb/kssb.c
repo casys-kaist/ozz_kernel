@@ -331,6 +331,8 @@ static void __exit kssb_cleanup(void)
 	for_each_possible_cpu(cpu) {
 		pcpu_page = per_cpu(kssb_buffer_pages, cpu);
 		vfree(pcpu_page);
+		pcpu_page = per_cpu(kssb_history_pages, cpu);
+		vfree(pcpu_page);
 	}
 
 	cleanup_flush_vector();
