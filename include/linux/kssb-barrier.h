@@ -4,6 +4,7 @@
 extern volatile char __ssb_do_emulate;
 extern void __ssb_pso_flush(void);
 extern void __ssb_pso_lfence(void);
+extern void kssb_record_history(const volatile void *v, size_t size);
 
 #define ____flush() __ssb_pso_flush()
 #define ____lfence() __ssb_pso_lfence()

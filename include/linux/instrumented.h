@@ -13,9 +13,11 @@
 #include <linux/kmsan-checks.h>
 #include <linux/types.h>
 #include <linux/kmemcov.h>
+#include <linux/kssb-barrier.h>
 
 #ifdef NO_INSTRUMENT_ATOMIC
 #define NO_TRACE_ATOMIC
+#define NO_RECORD_ATOMIC
 #endif
 
 #ifndef NO_TRACE_ATOMIC
@@ -24,6 +26,12 @@
 #else
 #define kmemcov_trace_load(v, size) do { } while(0)
 #define kmemcov_trace_store(v, size) do { } while(0)
+#endif
+
+#ifndef NO_RECORD_ATOMIC
+#define kssb_record(v, size) kssb_record_history(v, size)
+#else
+#define kssb_record(v, size) do { } while(0)
 #endif
 
 /**
@@ -54,6 +62,7 @@ static __always_inline void instrument_write(const volatile void *v, size_t size
 	kasan_check_write(v, size);
 	kcsan_check_write(v, size);
 	kmemcov_trace_store(v, size);
+	kssb_record(v, size);
 }
 
 /**
@@ -69,6 +78,7 @@ static __always_inline void instrument_read_write(const volatile void *v, size_t
 	kasan_check_write(v, size);
 	kcsan_check_read_write(v, size);
 	kmemcov_trace_store(v, size);
+	kssb_record(v, size);
 }
 
 /**
@@ -99,6 +109,7 @@ static __always_inline void instrument_atomic_write(const volatile void *v, size
 	kasan_check_write(v, size);
 	kcsan_check_atomic_write(v, size);
 	kmemcov_trace_store(v, size);
+	kssb_record(v, size);
 }
 
 /**
@@ -114,6 +125,7 @@ static __always_inline void instrument_atomic_read_write(const volatile void *v,
 	kasan_check_write(v, size);
 	kcsan_check_atomic_read_write(v, size);
 	kmemcov_trace_store(v, size);
+	kssb_record(v, size);
 }
 
 /**

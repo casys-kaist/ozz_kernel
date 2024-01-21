@@ -17,6 +17,8 @@
 
 #include "kssb.h"
 
+#define UNKNOWN_VALUE 0xdead
+
 bool load_prefetch_enabled = false;
 
 #define STOREBUFFER_BITS 10
@@ -105,8 +107,25 @@ static struct kssb_buffer_entry *alloc_entry(struct kssb_access *acc)
 	// The store buffer is exhausted. Let's flush the store buffer and
 	// the history and give a second shot.
 	do_buffer_flush(0);
-	clear_history();
 	entry = new_entry();
+	if (entry)
+		goto success;
+	return NULL;
+success:
+	entry->access = *acc;
+	entry->pid = current->pid;
+	return entry;
+}
+
+static struct kssb_buffer_entry *alloc_history_entry(struct kssb_access *acc)
+{
+	struct kssb_buffer_entry *entry = new_history_entry();
+	if (entry)
+		goto success;
+	// The history buffer is exhausted. Let's flush the history buffer
+	// and give a second shot.
+	clear_history();
+	entry = new_history_entry();
 	if (entry)
 		goto success;
 	return NULL;
@@ -142,7 +161,8 @@ static struct kssb_buffer_entry *get_history(struct kssb_access *acc)
 		// Two different addrs are possibly mashed into a same
 		// bucket so we need to check the address
 		if ((entry->access.aligned_addr == acc->aligned_addr) &&
-		    (entry->access.timestamp > __this_cpu_read(load_since))) {
+		    (entry->access.timestamp > __this_cpu_read(load_since)) &&
+			(entry->cpu != smp_processor_id())) {
 			return entry;
 		}
 	}
@@ -186,7 +206,7 @@ static void __flush_single_entry_po_preserve(struct kssb_access *acc)
 static void reclaim_entry_from_history(struct kssb_buffer_entry *entry)
 {
 	hash_del(&(entry->hlist));
-	reclaim_entry(entry);
+	reclaim_history_entry(entry);
 }
 
 static void clear_history(void)
@@ -231,6 +251,7 @@ static void record_history(struct kssb_buffer_entry *entry)
 
 static void flush_single_entry(struct kssb_buffer_entry *entry)
 {
+	struct kssb_buffer_entry *new_entry = NULL;
 	// We try our best to populate the page table entry before
 	// storing the entry in the store callback. So here we expect
 	// page table entries present for all entries. Although this
@@ -240,20 +261,25 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 	/* BUG_ON(in_page_fault_handler() && */
 	/*        kssb_page_net_present(&entry->access)); */
 
-	// Below should be atomic, or commit order will be corrupted
-	history_lock();
-	// Charge the past value in to the entry, and then update the
-	// value in memory
-	charge_past_value(entry);
-	__store_single_memcov_trace(&(entry->access));
-	// Remove entry from the store buffer first, and then move the
-	// entry to the history buffer.
 	hash_del(&(entry->hlist));
-	if (load_prefetch_enabled)
-		record_history(entry);
-	else
-		reclaim_entry(entry);
+
+	if (load_prefetch_enabled) {
+		new_entry = alloc_history_entry(&(entry->access));
+		if (!new_entry) 
+			WARN_ONCE(1, "History buffer is exhausted");
+	}
+	history_lock();
+	if (new_entry) {
+		// Charge the past value in to the entry, and then update the
+		// value in memory
+		charge_past_value(new_entry);
+		// Remove entry from the store buffer first, and then move the
+		// entry to the history buffer.
+		record_history(new_entry);
+	}
+	__store_single_memcov_trace(&(entry->access));
 	history_unlock();
+	reclaim_entry(entry);
 }
 
 static void do_buffer_flush(uint64_t aligned_addr)
@@ -359,18 +385,17 @@ static bool do_buffer_load_from_history(struct kssb_access *acc, uint64_t *ret)
 	return true;
 }
 
-static uint64_t do_buffer_load_latest(struct kssb_access *acc)
+static bool do_buffer_load_from_storebuffer(struct kssb_access *acc, uint64_t *ret)
 {
-	uint64_t ret;
 	struct kssb_buffer_entry *latest;
-	update_latest_access(commit_count);
 	// We don't have to masking upper bits of ret. It will be done
 	// when the value is returned.
-	if ((latest = latest_entry(acc)))
-		ret = __assemble_value(latest, acc);
-	else
-		ret = __load_single(acc);
-	return ret;
+	if ((latest = latest_entry(acc))) {
+		*ret = __assemble_value(latest, acc);
+		return true;
+	}
+
+	return false;
 }
 
 static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
@@ -384,11 +409,15 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 		     acc->aligned_addr, acc->offset, acc->size);
 
 	history_lock();
-	if (load_old_value)
+	ok = do_buffer_load_from_storebuffer(acc, &ret);
+	
+	if (!ok && load_old_value)
 		ok = do_buffer_load_from_history(acc, &ret);
 
-	if (!ok)
-		ret = do_buffer_load_latest(acc);
+	if (!ok) {
+		update_latest_access(commit_count);
+		ret = __load_single(acc);
+	}
 	history_unlock();
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
@@ -556,6 +585,32 @@ static bool kssb_enabled(void)
 	INIT_KSSB_ACCESS(_addr, 0, _size, kssb_load, inst)
 #define INIT_KSSB_STORE(_addr, _val, _size, inst) \
 	INIT_KSSB_ACCESS(_addr, _val, _size, kssb_store, inst)
+
+void kssb_record_history(const volatile void *v, size_t size)
+{
+	struct kssb_buffer_entry *entry;
+	unsigned long flags;
+	unsigned long inst = _RET_IP_;
+	struct kssb_access *accp,
+		acc = INIT_KSSB_STORE((uint64_t *)v, UNKNOWN_VALUE, size, inst);
+	accp = &acc;
+
+	raw_local_irq_save(flags);
+	if (CAN_EMULATE_KSSB(accp) && load_prefetch_enabled) {
+		align_access(accp);
+
+		if ((entry = alloc_history_entry(accp))) {
+			history_lock();
+			charge_past_value(entry);
+			record_history(entry);
+			history_unlock();
+		} else {
+			WARN_ONCE(1, "Store buffer is exhausted");
+		}
+	}
+	raw_local_irq_restore(flags);
+}
+EXPORT_SYMBOL(kssb_record_history);
 
 static uint64_t __load_callback_pso(uint64_t *addr, size_t size,
 				    unsigned long inst)
