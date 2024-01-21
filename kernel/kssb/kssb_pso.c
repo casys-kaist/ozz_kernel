@@ -162,7 +162,7 @@ static struct kssb_buffer_entry *get_history(struct kssb_access *acc)
 		// bucket so we need to check the address
 		if ((entry->access.aligned_addr == acc->aligned_addr) &&
 		    (entry->access.timestamp > __this_cpu_read(load_since)) &&
-			(entry->cpu != smp_processor_id())) {
+		    (entry->cpu != smp_processor_id())) {
 			return entry;
 		}
 	}
@@ -265,7 +265,7 @@ static void flush_single_entry(struct kssb_buffer_entry *entry)
 
 	if (load_prefetch_enabled) {
 		new_entry = alloc_history_entry(&(entry->access));
-		if (!new_entry) 
+		if (!new_entry)
 			WARN_ONCE(1, "History buffer is exhausted");
 	}
 	history_lock();
@@ -385,7 +385,8 @@ static bool do_buffer_load_from_history(struct kssb_access *acc, uint64_t *ret)
 	return true;
 }
 
-static bool do_buffer_load_from_storebuffer(struct kssb_access *acc, uint64_t *ret)
+static bool do_buffer_load_from_storebuffer(struct kssb_access *acc,
+					    uint64_t *ret)
 {
 	struct kssb_buffer_entry *latest;
 	// We don't have to masking upper bits of ret. It will be done
@@ -410,7 +411,7 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 
 	history_lock();
 	ok = do_buffer_load_from_storebuffer(acc, &ret);
-	
+
 	if (!ok && load_old_value)
 		ok = do_buffer_load_from_history(acc, &ret);
 
@@ -421,8 +422,6 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 	history_unlock();
 
 	printk_debug(KERN_INFO "do_buffer_load_aligned => %lx\n", ret);
-
-	do_buffer_flush_after_insn(acc);
 
 	return ret;
 }
