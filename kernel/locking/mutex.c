@@ -18,6 +18,8 @@
  *
  * Also see Documentation/locking/mutex-design.rst.
  */
+#define NO_INSTRUMENT_ATOMIC
+
 #include <linux/mutex.h>
 #include <linux/ww_mutex.h>
 #include <linux/sched/signal.h>
