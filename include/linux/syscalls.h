@@ -126,12 +126,11 @@ struct mnt_id_req;
 #define __TYPE_IS_L(t) (__TYPE_AS(t, 0L))
 #define __TYPE_IS_UL(t) (__TYPE_AS(t, 0UL))
 #define __TYPE_IS_LL(t) (__TYPE_AS(t, 0LL) || __TYPE_AS(t, 0ULL))
-#define __SC_LONG(t, a)                                                        \
-	__typeof(__builtin_choose_expr(__TYPE_IS_LL(t), 0LL, 0L)) a
-#define __SC_CAST(t, a) (__force t) a
-#define __SC_ARGS(t, a) a
-#define __SC_TEST(t, a)                                                        \
-	(void)BUILD_BUG_ON_ZERO(!__TYPE_IS_LL(t) && sizeof(t) > sizeof(long))
+#define __SC_LONG(t, a) __typeof(__builtin_choose_expr(__TYPE_IS_LL(t), 0LL, 0L)) a
+#define __SC_CAST(t, a)	(__force t) a
+#define __SC_TYPE(t, a)	t
+#define __SC_ARGS(t, a)	a
+#define __SC_TEST(t, a) (void)BUILD_BUG_ON_ZERO(!__TYPE_IS_LL(t) && sizeof(t) > sizeof(long))
 
 #ifdef CONFIG_FTRACE_SYSCALLS
 #define __SC_STR_ADECL(t, a) #a

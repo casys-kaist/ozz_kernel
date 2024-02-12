@@ -17,3 +17,4 @@ obj-$(CONFIG_KVM_ASYNC_PF) += async_pf.o
 obj-$(CONFIG_HAVE_KVM_IRQ_ROUTING) += irqchip.o
 obj-$(CONFIG_HAVE_KVM_DIRTY_RING) += dirty_ring.o
 obj-$(CONFIG_HAVE_KVM_PFNCACHE) += pfncache.o
+obj-$(CONFIG_KVM_PRIVATE_MEM) += guest_memfd.o
