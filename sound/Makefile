@@ -2,9 +2,6 @@
 # Makefile for the Linux sound card driver
 #
 
-KSSB_INSTRUMENT :=y
-export KSSB_INSTRUMENT
-
 obj-$(CONFIG_SOUND) += soundcore.o
 obj-$(CONFIG_DMASOUND) += oss/dmasound/
 obj-$(CONFIG_SND) += core/ i2c/ drivers/ isa/ pci/ ppc/ arm/ sh/ synth/ usb/ \
