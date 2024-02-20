@@ -62,9 +62,9 @@ static void history_unlock(void)
 	atomic_set(&__history_lock, 0);
 }
 
-static uint64_t commit_count;
-static DEFINE_PER_CPU(uint64_t, latest_access) = 0;
-static DEFINE_PER_CPU(uint64_t, load_since) = 0;
+static uint64_t global_timestamp;
+static DEFINE_PER_CPU(uint64_t, latest_store_ts) = 0;
+static DEFINE_PER_CPU(uint64_t, load_since_ts) = 0;
 
 static void do_buffer_flush(uint64_t);
 static bool is_spanning_access(struct kssb_access *acc);
@@ -161,7 +161,8 @@ static struct kssb_buffer_entry *get_history(struct kssb_access *acc)
 		// Two different addrs are possibly mashed into a same
 		// bucket so we need to check the address
 		if ((entry->access.aligned_addr == acc->aligned_addr) &&
-		    (entry->access.timestamp > __this_cpu_read(load_since)) &&
+		    (entry->access.timestamp >
+		     __this_cpu_read(load_since_ts)) &&
 		    (entry->cpu != smp_processor_id())) {
 			return entry;
 		}
@@ -226,8 +227,8 @@ static void charge_past_value(struct kssb_buffer_entry *entry)
 {
 	if (!load_prefetch_enabled)
 		return;
-	__this_cpu_write(latest_access, ++commit_count);
-	entry->access.timestamp = commit_count;
+	__this_cpu_write(latest_store_ts, ++global_timestamp);
+	entry->access.timestamp = global_timestamp;
 	entry->access.aligned_old_val =
 		READ_ONCE(*(uint64_t *)entry->access.aligned_addr);
 }
@@ -362,12 +363,13 @@ static inline uint64_t __assemble_value(struct kssb_buffer_entry *entry,
 	return ret;
 }
 
-static inline void update_latest_access(uint64_t new)
+static inline void update_latest_store_ts(uint64_t new)
 {
 	if (!load_prefetch_enabled)
 		return;
-	uint64_t old_access = __this_cpu_read(latest_access);
-	__this_cpu_write(latest_access, (new > old_access) ? new : old_access);
+	uint64_t old_access = __this_cpu_read(latest_store_ts);
+	__this_cpu_write(latest_store_ts,
+			 (new > old_access) ? new : old_access);
 }
 
 static bool do_buffer_load_from_history(struct kssb_access *acc, uint64_t *ret)
@@ -379,7 +381,7 @@ static bool do_buffer_load_from_history(struct kssb_access *acc, uint64_t *ret)
 
 	*ret = ((old->access.aligned_old_val) >> _BITS(acc->offset)) &
 	       _BIT_MASK(_BITS(acc->size));
-	update_latest_access(old->access.timestamp);
+	update_latest_store_ts(old->access.timestamp);
 	reclaim_entry_from_history(old);
 
 	return true;
@@ -416,7 +418,7 @@ static uint64_t do_buffer_load_aligned(struct kssb_access *acc)
 		ok = do_buffer_load_from_history(acc, &ret);
 
 	if (!ok) {
-		update_latest_access(commit_count);
+		update_latest_store_ts(global_timestamp);
 		ret = __load_single(acc);
 	}
 	history_unlock();
@@ -666,8 +668,8 @@ static void __lfence_callback_pso(void)
 	sanitize_memcov_trace_lfence();
 	if (in_kssb_enabled_task()) {
 		profile_lfence();
-		since = __this_cpu_read(latest_access);
-		__this_cpu_write(load_since, since);
+		since = __this_cpu_read(latest_store_ts);
+		__this_cpu_write(load_since_ts, since);
 	}
 	raw_local_irq_restore(flags);
 }
