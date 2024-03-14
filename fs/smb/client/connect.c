@@ -1736,7 +1736,7 @@ cifs_get_tcp_session(struct smb3_fs_context *ctx,
 	tcp_ses->channel_sequence_num = 0; /* only tracked for primary channel */
 	tcp_ses->reconnect_instance = 1;
 	tcp_ses->lstrp = jiffies;
-	tcp_ses->compress_algorithm = cpu_to_le16(ctx->compression);
+	tcp_ses->compression.requested = ctx->compress;
 	spin_lock_init(&tcp_ses->req_lock);
 	spin_lock_init(&tcp_ses->srv_lock);
 	spin_lock_init(&tcp_ses->mid_lock);
@@ -2803,6 +2803,8 @@ compare_mount_options(struct super_block *sb, struct cifs_mnt_data *mnt_data)
 		return 0;
 	if (old->ctx->closetimeo != new->ctx->closetimeo)
 		return 0;
+	if (old->ctx->reparse_type != new->ctx->reparse_type)
+		return 0;
 
 	return 1;
 }
@@ -3444,8 +3446,18 @@ int cifs_mount_get_tcon(struct cifs_mount_ctx *mnt_ctx)
 	 * the user on mount
 	 */
 	if ((cifs_sb->ctx->wsize == 0) ||
-	    (cifs_sb->ctx->wsize > server->ops->negotiate_wsize(tcon, ctx)))
-		cifs_sb->ctx->wsize = server->ops->negotiate_wsize(tcon, ctx);
+	    (cifs_sb->ctx->wsize > server->ops->negotiate_wsize(tcon, ctx))) {
+		cifs_sb->ctx->wsize =
+			round_down(server->ops->negotiate_wsize(tcon, ctx), PAGE_SIZE);
+		/*
+		 * in the very unlikely event that the server sent a max write size under PAGE_SIZE,
+		 * (which would get rounded down to 0) then reset wsize to absolute minimum eg 4096
+		 */
+		if (cifs_sb->ctx->wsize == 0) {
+			cifs_sb->ctx->wsize = PAGE_SIZE;
+			cifs_dbg(VFS, "wsize too small, reset to minimum ie PAGE_SIZE, usually 4096\n");
+		}
+	}
 	if ((cifs_sb->ctx->rsize == 0) ||
 	    (cifs_sb->ctx->rsize > server->ops->negotiate_rsize(tcon, ctx)))
 		cifs_sb->ctx->rsize = server->ops->negotiate_rsize(tcon, ctx);
