@@ -2,6 +2,9 @@
 #
 # Makefile for io_uring
 
+KSSB_INSTRUMENT := y
+export KSSB_INSTRUMENT
+
 obj-$(CONFIG_IO_URING)		+= io_uring.o xattr.o nop.o fs.o splice.o \
 					sync.o advise.o filetable.o \
 					openclose.o uring_cmd.o epoll.o \
