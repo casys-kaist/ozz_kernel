@@ -3897,7 +3897,9 @@ static void __wake_up_klogd(int val)
 	 *
 	 * This pairs with devkmsg_read:A and syslog_print:A.
 	 */
-	if (wq_has_sleeper(&log_wait) || /* LMM(__wake_up_klogd:A) */
+	// XXXYW: revert commit 1f5d783094cf28b4905f51cad846eb5d1db6673e
+	// if (wq_has_sleeper(&log_wait) || /* LMM(__wake_up_klogd:A) */
+	if (waitqueue_active(&log_wait) ||
 	    (val & PRINTK_PENDING_OUTPUT)) {
 		this_cpu_or(printk_pending, val);
 		irq_work_queue(this_cpu_ptr(&wake_up_klogd_work));

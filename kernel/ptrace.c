@@ -336,7 +336,8 @@ ok:
 	 * nondumpable).
 	 * Pairs with a write barrier in commit_creds().
 	 */
-	smp_rmb();
+	// XXXYW: revert commit f6581f5b55141a95657ef5742cf6a6bfa20a109f
+	// smp_rmb();
 	mm = task->mm;
 	if (mm &&
 	    ((get_dumpable(mm) != SUID_DUMP_USER) &&

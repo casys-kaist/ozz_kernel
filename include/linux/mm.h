@@ -657,7 +657,8 @@ static inline bool vma_start_read(struct vm_area_struct *vma)
 	 * we don't rely on for anything - the mm_lock_seq read against which we
 	 * need ordering is below.
 	 */
-	if (READ_ONCE(vma->vm_lock_seq) == READ_ONCE(vma->vm_mm->mm_lock_seq))
+	// XXXYW: revert commit b1f02b95758d05b799731d939e76a0bd6da312db
+	if (vma->vm_lock_seq == READ_ONCE(vma->vm_mm->mm_lock_seq))
 		return false;
 
 	if (unlikely(down_read_trylock(&vma->vm_lock->lock) == 0))
@@ -674,7 +675,7 @@ static inline bool vma_start_read(struct vm_area_struct *vma)
 	 * after it has been unlocked.
 	 * This pairs with RELEASE semantics in vma_end_write_all().
 	 */
-	if (unlikely(vma->vm_lock_seq == smp_load_acquire(&vma->vm_mm->mm_lock_seq))) {
+	if (unlikely(vma->vm_lock_seq == READ_ONCE(vma->vm_mm->mm_lock_seq))) {
 		up_read(&vma->vm_lock->lock);
 		return false;
 	}
@@ -697,7 +698,7 @@ static bool __is_vma_write_locked(struct vm_area_struct *vma, int *mm_lock_seq)
 	 * current task is holding mmap_write_lock, both vma->vm_lock_seq and
 	 * mm->mm_lock_seq can't be concurrently modified.
 	 */
-	*mm_lock_seq = vma->vm_mm->mm_lock_seq;
+	*mm_lock_seq = READ_ONCE(vma->vm_mm->mm_lock_seq);
 	return (vma->vm_lock_seq == *mm_lock_seq);
 }
 
@@ -720,7 +721,7 @@ static inline void vma_start_write(struct vm_area_struct *vma)
 	 * We don't really care about the correctness of that early check, but
 	 * we should use WRITE_ONCE() for cleanliness and to keep KCSAN happy.
 	 */
-	WRITE_ONCE(vma->vm_lock_seq, mm_lock_seq);
+	vma->vm_lock_seq = mm_lock_seq;
 	up_write(&vma->vm_lock->lock);
 }
 

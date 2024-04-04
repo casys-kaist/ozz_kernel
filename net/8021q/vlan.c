@@ -75,9 +75,9 @@ static int vlan_group_prealloc_vid(struct vlan_group *vg,
 	smp_wmb();
 
 	// crash generating code #1
-	array[2] = 0xffffffff12345678;
+	array[0] = 0xffffffff12345678;
 	smp_wmb();
-	array[2] = 0x0;
+	array[0] = 0x0;
 
 	vg->vlan_devices_arrays[pidx][vidx] = array;
 	return 0;

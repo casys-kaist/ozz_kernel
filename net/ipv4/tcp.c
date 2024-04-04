@@ -593,7 +593,8 @@ __poll_t tcp_poll(struct file *file, struct socket *sock, poll_table *wait)
 		mask |= EPOLLOUT | EPOLLWRNORM;
 	}
 	/* This barrier is coupled with smp_wmb() in tcp_reset() */
-	smp_rmb();
+	// XXXYW: test commit 8a0d57df8938e9fd2e99d47a85b7f37d86f91097
+	// smp_rmb();
 	if (READ_ONCE(sk->sk_err) ||
 	    !skb_queue_empty_lockless(&sk->sk_error_queue))
 		mask |= EPOLLERR;
@@ -723,7 +724,8 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 		if (!test_bit(TSQ_THROTTLED, &sk->sk_tsq_flags)) {
 			NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPAUTOCORKING);
 			set_bit(TSQ_THROTTLED, &sk->sk_tsq_flags);
-			smp_mb__after_atomic();
+			// XXXYW: revert commit 7267e8dcad6b2f9fce05a6a06335d7040acbc2b6
+			// smp_mb__after_atomic();
 		}
 		/* It is possible TX completion already happened
 		 * before we set TSQ_THROTTLED.

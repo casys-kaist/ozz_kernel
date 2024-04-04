@@ -91,7 +91,7 @@ static inline void vma_end_write_all(struct mm_struct *mm)
 	 * the VMA take effect before we unlock it with this store.
 	 * Pairs with ACQUIRE semantics in vma_start_read().
 	 */
-	smp_store_release(&mm->mm_lock_seq, mm->mm_lock_seq + 1);
+	WRITE_ONCE(mm->mm_lock_seq, mm->mm_lock_seq + 1);
 }
 #else
 static inline void vma_end_write_all(struct mm_struct *mm) {}

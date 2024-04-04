@@ -4228,7 +4228,8 @@ static int vmx_deliver_nested_posted_interrupt(struct kvm_vcpu *vcpu,
 		 * is visible, it doesn't ensure ordering between the store to
 		 * vcpu->requests and the load from vcpu->mode.
 		 */
-		smp_mb__after_atomic();
+		// XXXYW: revert commit 83c98007d9fb5c827cd954fc48e9cba034ef6fdc
+		// smp_mb__after_atomic();
 
 		/* the PIR and ON have been set by L1. */
 		kvm_vcpu_trigger_posted_interrupt(vcpu, POSTED_INTR_NESTED_VECTOR);

@@ -1142,7 +1142,9 @@ static unsigned long __fget_light(unsigned int fd, fmode_t mask)
 	 * atomic_read_acquire() pairs with atomic_dec_and_test() in
 	 * put_files_struct().
 	 */
-	if (likely(atomic_read_acquire(&files->count) == 1)) {
+	// XXXYW: revert commit 7ee47dcfff1835ff75a794d1075b6b5f5462cfed
+	// if (likely(atomic_read_acquire(&files->count) == 1)) {
+	if (likely(atomic_read(&files->count) == 1)) {
 		file = files_lookup_fd_raw(files, fd);
 		if (!file || unlikely(file->f_mode & mask))
 			return 0;

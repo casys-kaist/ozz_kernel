@@ -2934,7 +2934,8 @@ rb_set_commit_to_write(struct ring_buffer_per_cpu *cpu_buffer)
 	       rb_page_write(cpu_buffer->commit_page)) {
 
 		/* Make sure the readers see the content of what is committed. */
-		smp_wmb();
+		// XXXYW: revert commit 6455b6163d8c680366663cdb8c679514d55fc30c
+		// smp_wmb();
 		local_set(&cpu_buffer->commit_page->page->commit,
 			  rb_page_write(cpu_buffer->commit_page));
 		RB_WARN_ON(cpu_buffer,

@@ -650,7 +650,8 @@ void sbitmap_queue_clear(struct sbitmap_queue *sbq, unsigned int nr,
 	 * One invariant is that the clear bit has to be zero when the bit
 	 * is in use.
 	 */
-	smp_mb__before_atomic();
+	// XXXYW: revert commit e6d1fa584e0dd9bfebaf345e9feea588cf75ead2
+	// smp_mb__before_atomic();
 	sbitmap_deferred_clear_bit(&sbq->sb, nr);
 
 	pso_test_breakpoint();

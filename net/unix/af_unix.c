@@ -1623,7 +1623,9 @@ restart:
 		newu->path = otheru->path;
 	}
 	refcount_inc(&otheru->addr->refcnt);
-	smp_store_release(&newu->addr, otheru->addr);
+	// XXXYW: revert commit ae3b564179bfd06f32d051b9e5d72ce4b2a07c37 
+	// smp_store_release(&newu->addr, otheru->addr);
+	newu->addr = otheru->addr;
 
 	/* Set credentials */
 	copy_peercred(sk, other);
@@ -1753,7 +1755,7 @@ static int unix_getname(struct socket *sock, struct sockaddr *uaddr, int peer)
 		sock_hold(sk);
 	}
 
-	addr = smp_load_acquire(&unix_sk(sk)->addr);
+	addr = unix_sk(sk)->addr;
 	if (!addr) {
 		sunaddr->sun_family = AF_UNIX;
 		sunaddr->sun_path[0] = 0;
@@ -3068,9 +3070,10 @@ static int unix_open_file(struct sock *sk)
 	if (!ns_capable(sock_net(sk)->user_ns, CAP_NET_ADMIN))
 		return -EPERM;
 
-	if (!smp_load_acquire(&unix_sk(sk)->addr))
+	if (!(unix_sk(sk)->addr))
 		return -ENOENT;
 
+	BUG_ON(!(unix_sk(sk)->path.dentry));
 	path = unix_sk(sk)->path;
 	if (!path.dentry)
 		return -ENOENT;

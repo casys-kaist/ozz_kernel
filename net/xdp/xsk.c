@@ -305,7 +305,7 @@ static bool xsk_is_bound(struct xdp_sock *xs)
 {
 	if (READ_ONCE(xs->state) == XSK_BOUND) {
 		/* Matches smp_wmb() in bind(). */
-		smp_rmb();
+		// smp_rmb();
 		return true;
 	}
 	return false;
@@ -1011,11 +1011,12 @@ static __poll_t xsk_poll(struct file *file, struct socket *sock,
 			xsk_generic_xmit(sk);
 	}
 
+out:
 	if (xs->rx && !xskq_prod_is_empty(xs->rx))
 		mask |= EPOLLIN | EPOLLRDNORM;
 	if (xs->tx && xsk_tx_writeable(xs))
 		mask |= EPOLLOUT | EPOLLWRNORM;
-out:
+
 	rcu_read_unlock();
 	return mask;
 }
@@ -1033,7 +1034,7 @@ static int xsk_init_queue(u32 entries, struct xsk_queue **queue,
 		return -ENOMEM;
 
 	/* Make sure queue is ready before it can be seen by others */
-	/* smp_wmb(); */
+	// smp_wmb();
 	WRITE_ONCE(*queue, q);
 	return 0;
 }
@@ -1318,7 +1319,7 @@ out_unlock:
 		/* Matches smp_rmb() in bind() for shared umem
 		 * sockets, and xsk_is_bound().
 		 */
-		smp_wmb();
+		// smp_wmb();
 		WRITE_ONCE(xs->state, XSK_BOUND);
 	}
 out_release:
@@ -1621,7 +1622,7 @@ static int xsk_mmap(struct file *file, struct socket *sock,
 		return -EINVAL;
 
 	/* Matches the smp_wmb() in xsk_init_queue */
-	smp_rmb();
+	// smp_rmb();
 
 	// DR: To test kssb / relrazzer
 	BUG_ON(q->ring == NULL);

@@ -22,7 +22,8 @@ static void tls_strp_abort_strp(struct tls_strparser *strp, int err)
 	/* Report an error on the lower socket */
 	WRITE_ONCE(strp->sk->sk_err, -err);
 	/* Paired with smp_rmb() in tcp_poll() */
-	smp_wmb();
+	// XXXYW: revert commit 8a0d57df8938e9fd2e99d47a85b7f37d86f91097
+	// smp_wmb();
 	sk_error_report(strp->sk);
 }
 

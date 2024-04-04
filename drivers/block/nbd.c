@@ -417,15 +417,22 @@ static u32 req_to_nbd_cmd_type(struct request *req)
 
 static struct nbd_config *nbd_get_config_unlocked(struct nbd_device *nbd)
 {
-	if (refcount_inc_not_zero(&nbd->config_refs)) {
+	struct nbd_config *config;
+	
+	// XXXYW: revert commit c2da049f419417808466c529999170f5c3ef7d3d
+	// if (refcount_inc_not_zero(&nbd->config_refs)) {
+	if (refcount_read(&nbd->config_refs)) {
 		/*
 		 * Add smp_mb__after_atomic to ensure that reading nbd->config_refs
 		 * and reading nbd->config is ordered. The pair is the barrier in
 		 * nbd_alloc_and_init_config(), avoid nbd->config_refs is set
 		 * before nbd->config.
 		 */
-		smp_mb__after_atomic();
-		return nbd->config;
+		// smp_mb__after_atomic();
+		config = READ_ONCE(nbd->config);
+		BUG_ON(!config);
+		refcount_inc_not_zero(&nbd->config_refs);
+		return config;
 	}
 
 	return NULL;
@@ -1597,7 +1604,8 @@ static int nbd_alloc_and_init_config(struct nbd_device *nbd)
 	 * So nbd_get_config_unlocked() won't see nbd->config as null after
 	 * refcount_inc_not_zero() succeed.
 	 */
-	smp_mb__before_atomic();
+	// XXXYW: revert commit c2da049f419417808466c529999170f5c3ef7d3d
+	// smp_mb__before_atomic();
 	refcount_set(&nbd->config_refs, 1);
 
 	return 0;

@@ -221,7 +221,8 @@ static inline void qdisc_run_end(struct Qdisc *qdisc)
 		 * and test_bit() ordering is a store-load ordering, so a full
 		 * memory barrier is needed here.
 		 */
-		smp_mb();
+		// XXXYW: revert commit 2e8728c955ce0624b958eee6e030a37aca3a5d86
+		// smp_mb();
 
 		if (unlikely(test_bit(__QDISC_STATE_MISSED,
 				      &qdisc->state)))

@@ -1227,9 +1227,9 @@ static void sk_psock_verdict_data_ready(struct sock *sk)
 		rcu_read_lock();
 		psock = sk_psock(sk);
 		if (psock) {
-			read_lock_bh(&sk->sk_callback_lock);
-			sk_psock_data_ready(sk, psock);
-			read_unlock_bh(&sk->sk_callback_lock);
+			// read_lock_bh(&sk->sk_callback_lock);
+			psock->saved_data_ready(sk);
+			// read_unlock_bh(&sk->sk_callback_lock);
 		}
 		rcu_read_unlock();
 	}

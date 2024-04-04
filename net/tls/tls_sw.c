@@ -74,7 +74,8 @@ noinline void tls_err_abort(struct sock *sk, int err)
 	/* sk->sk_err should contain a positive error code. */
 	WRITE_ONCE(sk->sk_err, -err);
 	/* Paired with smp_rmb() in tcp_poll() */
-	smp_wmb();
+	// XXXYW: revert commit 8a0d57df8938e9fd2e99d47a85b7f37d86f91097
+	// smp_wmb();
 	sk_error_report(sk);
 }
 

@@ -3413,7 +3413,8 @@ static int smc_ulp_init(struct sock *sk)
 	smcsock->file->private_data = smcsock;
 	smcsock->file->f_inode = SOCK_INODE(smcsock); /* replace inode when sock_close */
 	smcsock->file->f_path.dentry->d_inode = SOCK_INODE(smcsock); /* dput() in __fput */
-	tcp->file = NULL;
+	// XXXYW: This code leads to null-ptr-deref in fput. why inserted??
+	// tcp->file = NULL;
 
 	return ret;
 }
