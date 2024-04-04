@@ -36,7 +36,7 @@ static DEFINE_PER_CPU(struct llist_head, kssb_buffer_pool);
 static DEFINE_PER_CPU(void *, kssb_history_pages);
 static DEFINE_PER_CPU(struct llist_head, kssb_history_pool);
 
-struct kssb_buffer_entry *__new_entry(struct llist_head *pcpu_pool)
+static struct kssb_buffer_entry *__new_entry(struct llist_head *pcpu_pool)
 {
 	struct llist_node *llist;
 	struct kssb_buffer_entry *entry = NULL;
@@ -68,7 +68,7 @@ struct kssb_buffer_entry *new_history_entry()
 	return entry;
 }
 
-void __reclaim_entry(struct kssb_buffer_entry *entry, struct llist_head *llist)
+static void __reclaim_entry(struct kssb_buffer_entry *entry, struct llist_head *llist)
 {
 	___llist_add_batch(&entry->llist, &entry->llist, llist);
 }
