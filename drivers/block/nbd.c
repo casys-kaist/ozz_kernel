@@ -417,11 +417,10 @@ static u32 req_to_nbd_cmd_type(struct request *req)
 
 static struct nbd_config *nbd_get_config_unlocked(struct nbd_device *nbd)
 {
-	struct nbd_config *config;
-	
 	// XXXYW: revert commit c2da049f419417808466c529999170f5c3ef7d3d
 	// if (refcount_inc_not_zero(&nbd->config_refs)) {
 	if (refcount_read(&nbd->config_refs)) {
+		refcount_inc(&nbd->config_refs);
 		/*
 		 * Add smp_mb__after_atomic to ensure that reading nbd->config_refs
 		 * and reading nbd->config is ordered. The pair is the barrier in
@@ -429,10 +428,8 @@ static struct nbd_config *nbd_get_config_unlocked(struct nbd_device *nbd)
 		 * before nbd->config.
 		 */
 		// smp_mb__after_atomic();
-		config = READ_ONCE(nbd->config);
-		BUG_ON(!config);
-		refcount_inc_not_zero(&nbd->config_refs);
-		return config;
+		BUG_ON(!nbd->config);
+		return nbd->config;
 	}
 
 	return NULL;
