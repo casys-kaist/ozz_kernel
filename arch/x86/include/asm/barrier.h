@@ -11,6 +11,8 @@
  * to devices.
  */
 
+#define NO_BARRIER_SEMANTIC "/*no kssb*/"
+
 #ifdef CONFIG_X86_32
 #define mb() asm volatile(ALTERNATIVE("lock; addl $0,-4(%%esp)", "mfence", \
 				      X86_FEATURE_XMM2) ::: "memory", "cc")
@@ -38,7 +40,7 @@ static __always_inline unsigned long array_index_mask_nospec(unsigned long index
 {
 	unsigned long mask;
 
-	asm volatile ("cmp %1,%2; sbb %0,%0;"
+	asm volatile ("cmp %1,%2; sbb %0,%0;" NO_BARRIER_SEMANTIC
 			:"=r" (mask)
 			:"g"(size),"r" (index)
 			:"cc");
